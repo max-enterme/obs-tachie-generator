@@ -17,7 +17,7 @@ describe('App', () => {
     expect(screen.getByText(/まだ登録がありません/)).toBeInTheDocument()
   })
 
-  it('ユーザーを追加すると一覧と出力CSSに反映される', () => {
+  it('ユーザーを追加すると一覧と出力CSSに反映される', async () => {
     render(<App />)
     fireEvent.change(screen.getByLabelText('Discord ユーザーID'), {
       target: { value: '649228696229511179' },
@@ -27,12 +27,12 @@ describe('App', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: '追加' }))
 
-    // 一覧に出る（登録ユーザーパネル内で確認）
+    // 一覧に出る（登録ユーザーパネル内で確認、追加は非同期なので findBy で待つ）
     const listPanel = screen
       .getByRole('heading', { name: /登録ユーザー/ })
       .closest('.panel')!
     expect(
-      within(listPanel as HTMLElement).getByText('649228696229511179'),
+      await within(listPanel as HTMLElement).findByText('649228696229511179'),
     ).toBeInTheDocument()
     // 出力CSSに body::after（常時表示・既定）が出る
     const out = screen.getByRole('heading', { name: '出力 CSS' }).closest('.panel')!

@@ -21,6 +21,8 @@ test: npm run typecheck && npm run lint && npx vitest run
 |---|---|
 | `src/lib/generateCss.ts` | users+options → Streamkit互換CSS(data URI埋め込み / 常時表示 body::after / 発話 `:has()` / 位置・サイズ)。**テスト対象** |
 | `src/lib/image.ts` | `File → dataURI`(任意リサイズ・PNG/JPEG) |
+| `src/lib/imageSource.ts` | 画像URLの解決(Streamkit CSP 許可ホスト判定 / URL→dataURI / 自動・URL・dataURI モード)。**判定は純粋関数でテスト** |
+| `src/ui/TachiePreview.tsx` | 透過市松の OBS ビューポート風プレビュー(位置・サイズ・発話演出の確認) |
 | `src/lib/state.ts` | 設定の localStorage / URL 永続化 |
 | `src/ui/*` | UserList / UserForm / OptionsPanel / OutputPanel(コピー・per-person DL・まとめDL) |
 | ルート | Vite + React + TS 雛形、`typecheck`/`lint`/`vitest` スクリプト、CI |
