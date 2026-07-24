@@ -1,0 +1,61 @@
+---
+feature: css-generator-core
+issue:            # 対応する Feature issue 番号。ダッシュボードが spec↔issue をリンクする
+release: r1
+priority: must
+status: 未着手
+---
+
+# Streamkit 互換 立ち絵CSSジェネレーター(コア)
+
+> spec.md — フィーチャーの「何を・なぜ」。正本はこのテキストと GitHub(Feature issue)。
+
+## 目的
+OBS で Discord の通話相手を「立ち絵」で表示するための **Discord Streamkit 用カスタムCSS** を、
+ブラウザ上で生成する静的Webツールを提供する。既存ツールに無い **画像の data URI 埋め込み** と
+**通話に居ない時も常時表示** を最初から備える。
+
+## 背景 / 課題
+- 参考: alfe氏「OBSのDiscord通話相手立ち絵表示ジェネレーター」(Streamkit 用CSSを吐く静的SPA)。
+  **本プロジェクトは着想を得た独自実装で、alfe氏のコードは流用しない。**
+- 実運用(わいたまりーぐ 悪手率蛇王 S6)で既存ツールの2点に詰まった:
+  1. **画像が外部URL指定のみ** → Streamkit ページの CSP(`img-src` が Discord系 / imgur 等 + `data:` `blob:` のみ許可)で任意ホスト(例 Cloudflare Pages)が弾かれる。Discord 添付URLは数時間で失効し恒久運用に不可。
+  2. **通話に居ない時は表示できない**(Streamkit は VC 接続中のユーザーしか描画しない)。
+- → 画像を **data URI で CSS に埋め込み**(外部ホスト不要・CSP回避・失効なし)、
+  **常時表示**(`body::after` + CSS `:has()` で発話検知)に対応した独自ツールが必要。
+
+## スコープ
+- **含む**:
+  - Vite + React + TypeScript の静的SPA(サーバー無し・クライアント完結)。Cloudflare Pages ホスティング。
+  - ユーザー(Discord ユーザーID / 表示名 / 立ち絵画像)を複数登録。
+  - **画像アップロード/ドロップ → data URI 埋め込み**(外部URL指定も可)。
+  - **常時表示トグル**(通話に居なくても表示。`body::after` + `:has()`)。
+  - **発話演出**(跳ね / 白フチ)の on-off と強さ調整。
+  - **位置(left/bottom)・サイズ(width)調整**。
+  - 出力: **per-person 個別 + まとめ版**、ワンクリックコピー & ダウンロード。
+- **含まない(v1)**:
+  - 口パク(`--img-mouth-url`)対応(将来 feature)。
+  - サーバー保存 / 共有リンク / 設定のクラウド同期。
+  - Discord API 連携(サーバー/チャンネルからユーザー自動取得)。
+  - 多言語(日本語のみ)。
+
+## 受け入れ条件
+- [ ] Discord ユーザーID と画像(アップロード)から、その人の Streamkit カスタムCSSを生成できる
+- [ ] 生成CSSは画像が **data URI で埋め込まれ**、外部ホスト無しで OBS 上に表示される
+- [ ] **常時表示ON**時: 通話に居なくても立ち絵が出る(`body::after`)/ 発話時に演出が出る(`:has()` 検知)
+- [ ] **位置・サイズ**をUIで変更でき、出力CSSに反映される
+- [ ] **per-person 個別ダウンロード**と**コピー**ができる(まとめ版も)
+- [ ] Cloudflare Pages にデプロイされ、公開URLで動作する
+
+## メモ / 降りる箇所
+- **出力CSSの正本フォーマットは Streamkit の実DOM準拠**: アバターは `<img>` 自身
+  (`.Voice_avatar__` に `border:3px/50x50/border-radius:50%`)、発話時にその img へ
+  `Voice_avatarSpeaking__` クラスが付与される。クラス名はハッシュ付きのため
+  セレクタは `[class*="Voice_..."]` の**前方一致**を使う(Streamkit 更新への耐性)。
+- **描画は `body::after` 1要素に統一**する設計(常時表示ベースと通話中imgを2要素で突き合わせると
+  数pxズレる → 描画源を1つにするとズレが原理的に消える)。発話は
+  `body:has(img[src*="avatars/<id>"][class*="Voice_avatarSpeaking__"])::after` で検知。
+- **`:has()` 依存**: 常時表示・発話検知は CSS `:has()` を使うため、古い OBS(CEF)では効かない。
+  フォールバック/注意書きの要否は実装時に判断(降りる箇所)。
+- **UI 挙動・レイアウトは SPEC-OPS §10 によりモック併置**。実装前に `/idea-board` で確定する。
+- **著作権**: alfe氏のコード・アセットは流用しない。README に inspired-by として明記する。
