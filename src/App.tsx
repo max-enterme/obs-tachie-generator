@@ -3,6 +3,7 @@ import UserForm from './ui/UserForm'
 import UserList from './ui/UserList'
 import OptionsPanel from './ui/OptionsPanel'
 import OutputPanel from './ui/OutputPanel'
+import TachiePreview from './ui/TachiePreview'
 import { loadState, saveState } from './lib/state'
 import type { GenerateOptions, TachieUser } from './lib/types'
 
@@ -39,6 +40,8 @@ export default function App() {
           <OptionsPanel options={options} onChange={setOptions} />
         </div>
         <div>
+          <TachiePreview users={users} options={options} />
+          <div style={{ height: 16 }} />
           <UserList users={users} onRemove={removeUser} />
         </div>
       </div>

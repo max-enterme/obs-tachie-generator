@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { fileToDataUri, isWithinSizeLimit } from '../lib/image'
+import { resolveImageSource, type ImageSourceMode } from '../lib/imageSource'
 import type { TachieUser } from '../lib/types'
 
 interface Props {
@@ -12,14 +13,18 @@ const DEFAULT_MAX_WIDTH = 960
 export default function UserForm({ onAdd }: Props) {
   const [id, setId] = useState('')
   const [name, setName] = useState('')
-  const [imageUrl, setImageUrl] = useState('')
+  const [fileDataUri, setFileDataUri] = useState('')
+  const [urlInput, setUrlInput] = useState('')
+  const [mode, setMode] = useState<ImageSourceMode>('auto')
   const [maxWidth, setMaxWidth] = useState(DEFAULT_MAX_WIDTH)
   const [error, setError] = useState('')
+  const [info, setInfo] = useState('')
   const [busy, setBusy] = useState(false)
 
   async function onFile(file: File | undefined) {
     if (!file) return
     setError('')
+    setInfo('')
     if (!isWithinSizeLimit(file)) {
       setError('画像が大きすぎます（8MB まで）。')
       return
@@ -29,7 +34,9 @@ export default function UserForm({ onAdd }: Props) {
       const dataUri = await fileToDataUri(file, {
         maxWidth: maxWidth > 0 ? maxWidth : undefined,
       })
-      setImageUrl(dataUri)
+      setFileDataUri(dataUri)
+      setUrlInput('')
+      setInfo('画像をアップロードしました（data URI 埋め込み）。')
     } catch {
       setError('画像の読み込みに失敗しました。')
     } finally {
@@ -37,21 +44,39 @@ export default function UserForm({ onAdd }: Props) {
     }
   }
 
-  function submit() {
+  async function submit() {
+    setError('')
+    setInfo('')
     const cleanId = id.replace(/[^0-9]/g, '')
     if (!cleanId) {
       setError('Discord ユーザーID（数字）を入力してください。')
       return
     }
+
+    let imageUrl = ''
+    if (fileDataUri) {
+      imageUrl = fileDataUri
+    } else if (urlInput.trim()) {
+      setBusy(true)
+      try {
+        const resolved = await resolveImageSource(urlInput.trim(), mode)
+        imageUrl = resolved.imageUrl
+        if (resolved.warning) setInfo(`${resolved.note}／⚠️ ${resolved.warning}`)
+      } finally {
+        setBusy(false)
+      }
+    }
+
     if (!imageUrl) {
       setError('立ち絵画像（アップロード or URL）を指定してください。')
       return
     }
+
     onAdd({ id: cleanId, name: name.trim(), imageUrl })
     setId('')
     setName('')
-    setImageUrl('')
-    setError('')
+    setFileDataUri('')
+    setUrlInput('')
   }
 
   return (
@@ -108,17 +133,32 @@ export default function UserForm({ onAdd }: Props) {
           <input
             id="uf-url"
             type="url"
-            placeholder="data:image/png;base64,... または https://..."
-            value={imageUrl.startsWith('data:') ? '' : imageUrl}
-            onChange={(e) => setImageUrl(e.target.value)}
+            placeholder="https://... または data:image/png;base64,..."
+            value={urlInput}
+            onChange={(e) => {
+              setUrlInput(e.target.value)
+              if (e.target.value) setFileDataUri('')
+            }}
           />
         </div>
       </div>
 
-      {imageUrl.startsWith('data:') && (
-        <p className="hint">画像を埋め込み済み（data URI）。</p>
-      )}
-      {busy && <p className="hint">画像を処理中…</p>}
+      <div className="field">
+        <label htmlFor="uf-mode">URL の扱い（アップロード時は常に data URI）</label>
+        <select
+          id="uf-mode"
+          value={mode}
+          onChange={(e) => setMode(e.target.value as ImageSourceMode)}
+        >
+          <option value="auto">自動（許可ホストは URL のまま・それ以外は data URI 化）</option>
+          <option value="url">URL のまま使う</option>
+          <option value="dataUri">data URI に変換して埋め込む</option>
+        </select>
+      </div>
+
+      {fileDataUri && <p className="hint">画像を埋め込み済み（data URI）。</p>}
+      {busy && <p className="hint">処理中…</p>}
+      {info && <p className="hint">{info}</p>}
       {error && (
         <p className="hint" style={{ color: 'var(--danger)' }} role="alert">
           {error}
