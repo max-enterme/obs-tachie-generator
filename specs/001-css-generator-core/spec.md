@@ -1,6 +1,6 @@
 ---
 feature: css-generator-core
-issue:            # 対応する Feature issue 番号。ダッシュボードが spec↔issue をリンクする
+issue: 1
 release: r1
 priority: must
 status: 未着手
