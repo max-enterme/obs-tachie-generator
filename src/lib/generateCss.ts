@@ -1,4 +1,4 @@
-import type { GenerateOptions, SpeakEffect, TachieUser } from './types'
+import { DIM_BRIGHTNESS_PCT, type GenerateOptions, type SpeakEffect, type TachieUser } from './types'
 
 /**
  * Streamkit 互換の立ち絵カスタムCSSを組み立てる純粋関数群。
@@ -11,15 +11,17 @@ import type { GenerateOptions, SpeakEffect, TachieUser } from './types'
  *
  * 2つの描画方式:
  * - 常時表示（standalone）: `body::after` 1要素だけで描画。通話に居ても居なくても同じ位置に出る。
- *   描画源が1つなので位置ズレが原理的に起きない。発話は
- *   `body:has(img[src*="avatars/<id>"][class*="Voice_avatarSpeaking__"])::after` で検知。**1人=1ブラウザソース。**
- * - まとめ（combined）: Streamkit の実 img を人ごとに `content` 差し替え。1ソースに複数人を出せるが、
- *   Streamkit は通話中のユーザーしか描画しないため **通話中のみ表示**（常時表示にはできない）。
+ *   発話は `body:has(img[src*="avatars/<id>"][class*="Voice_avatarSpeaking__"])::after` で検知。**1人=1ソース。**
+ * - まとめ（combined）: Streamkit の実 img を人ごとに `content` 差し替え。1ソースに複数人を出せるが通話中のみ表示。
+ *
+ * 「話すときの動き」は 枠(outline) / 点滅(blink) / ぴょこぴょこ(bounce) を個別に on/off。
+ * 「静かな人を暗くする」(dimWhenQuiet) は非発話の立ち絵を暗くし、発話中だけ明るく戻す。
  */
+
+type Effect = 'jump' | 'light' | 'blink'
 
 /** data URI / URL を CSS の `url("...")` として安全に包む。 */
 function cssUrl(rawUrl: string): string {
-  // ダブルクォート・バックスラッシュ・改行だけ潰せば url("...") の中で壊れない。
   const escaped = rawUrl
     .replace(/\\/g, '\\\\')
     .replace(/"/g, '\\"')
@@ -30,6 +32,15 @@ function cssUrl(rawUrl: string): string {
 /** カスタムプロパティ名に使えるよう ID を数字だけに正規化する。 */
 function safeId(id: string): string {
   return id.replace(/[^0-9]/g, '')
+}
+
+/** 枠・後光の色を安全化する（想定外の値は白に倒して CSS を壊さない）。 */
+export function safeColor(color: string): string {
+  const c = color.trim()
+  if (/^#([0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(c)) return c
+  if (/^rgb\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*\)$/i.test(c)) return c
+  if (/^rgba\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*(0|1|0?\.\d+)\s*\)$/i.test(c)) return c
+  return '#FFFFFF'
 }
 
 const KEYFRAMES_JUMP_TRANSFORM = (jumpPx: number) => `@keyframes speak-jump {
@@ -44,23 +55,35 @@ const KEYFRAMES_JUMP_BOTTOM = (jumpPx: number) => `@keyframes speak-jump {
   100% { bottom: 0px; }
 }`
 
-const KEYFRAMES_LIGHT = `@keyframes speak-light {
-  0% { filter: drop-shadow(0 0 2px #FFFFFF) brightness(100%) drop-shadow(2px 2px 0px #FFFFFF) drop-shadow(-2px -2px 0px #FFFFFF) drop-shadow(-2px 2px 0px #FFFFFF) drop-shadow(2px -2px 0px #FFFFFF); }
-  50% { filter: drop-shadow(0 0 8px #FFFFFF) brightness(100%) drop-shadow(2px 2px 0px #FFFFFF) drop-shadow(-2px -2px 0px #FFFFFF) drop-shadow(-2px 2px 0px #FFFFFF) drop-shadow(2px -2px 0px #FFFFFF); }
-  100% { filter: drop-shadow(0 0 2px #FFFFFF) brightness(100%) drop-shadow(2px 2px 0px #FFFFFF) drop-shadow(-2px -2px 0px #FFFFFF) drop-shadow(-2px 2px 0px #FFFFFF) drop-shadow(2px -2px 0px #FFFFFF); }
+const KEYFRAMES_LIGHT = (color: string) => {
+  const c = safeColor(color)
+  const shadows = (blur: number) =>
+    `drop-shadow(0 0 ${blur}px ${c}) drop-shadow(2px 2px 0px ${c}) drop-shadow(-2px -2px 0px ${c}) drop-shadow(-2px 2px 0px ${c}) drop-shadow(2px -2px 0px ${c})`
+  return `@keyframes speak-light {
+  0% { filter: ${shadows(2)}; }
+  50% { filter: ${shadows(8)}; }
+  100% { filter: ${shadows(2)}; }
+}`
+}
+
+const KEYFRAMES_BLINK = `@keyframes speak-blink {
+  0% { opacity: 1; }
+  50% { opacity: 0.35; }
+  100% { opacity: 1; }
 }`
 
-/** 有効な演出（跳ね/白フチ）を列挙する。空なら発話演出は出さない。 */
-function activeEffects(speak: SpeakEffect): Array<'jump' | 'light'> {
+/** 有効な演出を列挙する。空なら発話演出は出さない。 */
+function activeEffects(speak: SpeakEffect): Effect[] {
   if (!speak.enabled) return []
-  const effects: Array<'jump' | 'light'> = []
-  if (speak.jumpPx > 0) effects.push('jump')
-  if (speak.whiteOutline) effects.push('light')
+  const effects: Effect[] = []
+  if (speak.bounce && speak.jumpPx > 0) effects.push('jump')
+  if (speak.outline) effects.push('light')
+  if (speak.blink) effects.push('blink')
   return effects
 }
 
 /** `animation:` の値を組む。 */
-function animationValue(effects: Array<'jump' | 'light'>, durationMs: number): string {
+function animationValue(effects: Effect[], durationMs: number): string {
   return effects
     .map((e) => `${durationMs}ms infinite alternate ease-in-out speak-${e}`)
     .join(',')
@@ -76,12 +99,31 @@ function rootBlock(users: TachieUser[]): string {
   return `:root {\n${lines.join('\n')}\n}`
 }
 
+/** 追加する keyframe 定義を、含まれる effect に応じて集める。 */
+function keyframeBlocks(
+  effects: Effect[],
+  speak: SpeakEffect,
+  jumpKind: 'transform' | 'bottom',
+): string[] {
+  const blocks: string[] = []
+  if (effects.includes('jump')) {
+    blocks.push(
+      jumpKind === 'transform'
+        ? KEYFRAMES_JUMP_TRANSFORM(speak.jumpPx)
+        : KEYFRAMES_JUMP_BOTTOM(speak.jumpPx),
+    )
+  }
+  if (effects.includes('light')) blocks.push(KEYFRAMES_LIGHT(speak.outlineColor))
+  if (effects.includes('blink')) blocks.push(KEYFRAMES_BLINK)
+  return blocks
+}
+
 /**
  * 常時表示（standalone）。`body::after` 1要素で1人を描画する。1人=1ブラウザソース。
  */
 export function generateStandaloneCss(user: TachieUser, options: GenerateOptions): string {
   const id = safeId(user.id)
-  const { left, bottom, width, speak } = options
+  const { left, bottom, width, dimWhenQuiet, speak } = options
   const effects = activeEffects(speak)
 
   const afterDecls = [
@@ -91,6 +133,8 @@ export function generateStandaloneCss(user: TachieUser, options: GenerateOptions
     `  bottom: ${bottom}px;`,
     `  display: block;`,
     ...(width != null ? [`  width: ${width}px;`] : []),
+    // 静かな人を暗くする：非発話時の既定を暗く
+    ...(dimWhenQuiet ? [`  filter: brightness(${DIM_BRIGHTNESS_PCT}%);`] : []),
   ]
 
   const parts: string[] = [
@@ -101,23 +145,29 @@ export function generateStandaloneCss(user: TachieUser, options: GenerateOptions
     `/* 立ち絵（常時表示：通話に居ても居なくても同じ位置） */\nbody::after {\n${afterDecls.join('\n')}\n}`,
   ]
 
-  if (effects.length > 0) {
+  // 発話中のルール：演出があるか、暗転解除（dim）が要るなら出す
+  if (effects.length > 0 || dimWhenQuiet) {
+    const speakingDecls: string[] = []
+    // outline アニメが filter を持つ場合はそれで明るさが戻る。それ以外は明示的に戻す。
+    if (dimWhenQuiet && !effects.includes('light')) {
+      speakingDecls.push(`  filter: brightness(100%);`)
+    }
+    if (effects.length > 0) {
+      speakingDecls.push(`  animation: ${animationValue(effects, speak.durationMs)};`)
+    }
     parts.push(
       `/* 発話中：非表示の実 img に付く Voice_avatarSpeaking__ を :has() で検知して body::after を演出 */
 body:has(img[src*="avatars/${id}"][class*="Voice_avatarSpeaking__"])::after {
-  animation: ${animationValue(effects, speak.durationMs)};
+${speakingDecls.join('\n')}
 }`,
     )
   }
 
-  // Streamkit 側の実描画は全部隠す（描画は body::after のみ）
   parts.push(
     `img {\n  display: none !important;\n}`,
     `[class*="Voice_name__"], [class*="Voice_user__"] {\n  display: none !important;\n}`,
+    ...keyframeBlocks(effects, speak, 'transform'),
   )
-
-  if (effects.includes('jump')) parts.push(KEYFRAMES_JUMP_TRANSFORM(speak.jumpPx))
-  if (effects.includes('light')) parts.push(KEYFRAMES_LIGHT)
 
   return parts.join('\n\n') + '\n'
 }
@@ -126,7 +176,7 @@ body:has(img[src*="avatars/${id}"][class*="Voice_avatarSpeaking__"])::after {
  * まとめ（combined）。Streamkit の実 img を人ごとに差し替える。1ソースに複数人を出せるが通話中のみ表示。
  */
 export function generateCombinedCss(users: TachieUser[], options: GenerateOptions): string {
-  const { left, bottom, width, speak } = options
+  const { left, bottom, width, dimWhenQuiet, speak } = options
   const effects = activeEffects(speak)
 
   const parts: string[] = [
@@ -139,10 +189,21 @@ export function generateCombinedCss(users: TachieUser[], options: GenerateOption
     `/* 登録外の人は立ち絵なし＝一旦すべて非表示 */\nimg {\n  display: none;\n}`,
   ]
 
-  if (effects.length > 0) {
-    parts.push(
-      `[class*="Voice_avatarSpeaking__"] {\n  position: relative;\n  animation: ${animationValue(effects, speak.durationMs)};\n}`,
-    )
+  // 静かな人を暗くする：全アバターを既定で暗くする
+  if (dimWhenQuiet) {
+    parts.push(`[class*="Voice_avatar__"] {\n  filter: brightness(${DIM_BRIGHTNESS_PCT}%);\n}`)
+  }
+
+  // 発話中のルール
+  if (effects.length > 0 || dimWhenQuiet) {
+    const speakingDecls: string[] = [`  position: relative;`]
+    if (dimWhenQuiet && !effects.includes('light')) {
+      speakingDecls.push(`  filter: brightness(100%);`)
+    }
+    if (effects.length > 0) {
+      speakingDecls.push(`  animation: ${animationValue(effects, speak.durationMs)};`)
+    }
+    parts.push(`[class*="Voice_avatarSpeaking__"] {\n${speakingDecls.join('\n')}\n}`)
   }
 
   for (const u of users) {
@@ -159,8 +220,7 @@ export function generateCombinedCss(users: TachieUser[], options: GenerateOption
     parts.push(`${label}img[src*="avatars/${id}"] {\n${decls.join('\n')}\n}`)
   }
 
-  if (effects.includes('jump')) parts.push(KEYFRAMES_JUMP_BOTTOM(speak.jumpPx))
-  if (effects.includes('light')) parts.push(KEYFRAMES_LIGHT)
+  parts.push(...keyframeBlocks(effects, speak, 'bottom'))
 
   return parts.join('\n\n') + '\n'
 }

@@ -27,7 +27,8 @@ describe('normalizeState', () => {
     expect(s.options.left).toBe(100)
     expect(s.options.bottom).toBe(DEFAULT_OPTIONS.bottom)
     expect(s.options.speak.jumpPx).toBe(5)
-    expect(s.options.speak.whiteOutline).toBe(DEFAULT_OPTIONS.speak.whiteOutline)
+    expect(s.options.speak.outline).toBe(DEFAULT_OPTIONS.speak.outline)
+    expect(s.options.speak.outlineColor).toBe(DEFAULT_OPTIONS.speak.outlineColor)
   })
 })
 
