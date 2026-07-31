@@ -40,8 +40,8 @@ describe('App', () => {
     // --- ステップ④（CSSを出力）へ移動して出力CSSを確認 ---
     fireEvent.click(screen.getByRole('button', { name: /CSSを出力/ }))
 
-    // 既定は「個別（常時表示）」モード → body::after と埋め込み変数がその人のIDで出る
-    const out = screen.getByRole('heading', { name: '出力 CSS' }).closest('.panel')!
+    // 出力は個別（常時表示）のみ → body::after と埋め込み変数がその人のIDで出る
+    const out = screen.getByRole('heading', { name: /出力 CSS/ }).closest('.panel')!
     const textarea = within(out as HTMLElement).getByRole<HTMLTextAreaElement>('textbox')
     expect(textarea.value).toContain('body::after')
     expect(textarea.value).toContain('--img-stand-url-649228696229511179')

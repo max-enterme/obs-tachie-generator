@@ -112,11 +112,12 @@ export default function App() {
                 <div>
                   <h2>CSS を出力して OBS に貼る</h2>
                   <p className="lead">
-                    出力モードを選んでコピー / ダウンロードし、OBS のブラウザソースのカスタムCSSに貼ります。
+                    人ごとの CSS をコピー / ダウンロードし、OBS のブラウザソース（1人=1ソース）の
+                    カスタムCSSに貼ります。
                   </p>
                 </div>
               </div>
-              <OutputPanel users={users} options={options} onChange={setOptions} />
+              <OutputPanel users={users} options={options} />
             </section>
           )}
 

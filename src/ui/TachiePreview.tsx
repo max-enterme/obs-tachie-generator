@@ -33,13 +33,13 @@ export default function TachiePreview({
   title = 'プレビュー',
   toggleId = 'tp-speaking',
 }: Props) {
-  const { left, bottom, width, dimWhenQuiet, speak, alwaysShow } = options
+  const { left, bottom, width, dimWhenQuiet, speak } = options
   const leftPct = (left / REF_W) * 100
   const bottomPct = (bottom / REF_H) * 100
   const widthPct = ((width ?? DEFAULT_PREVIEW_WIDTH) / REF_W) * 100
 
   const anims: string[] = []
-  if (speaking && speak.enabled) {
+  if (speaking) {
     if (speak.bounce && speak.jumpPx > 0) {
       anims.push(`tachie-preview-jump ${speak.durationMs}ms infinite alternate ease-in-out`)
     }
@@ -77,7 +77,6 @@ export default function TachiePreview({
             type="checkbox"
             checked={speaking}
             onChange={(e) => onSpeakingChange(e.target.checked)}
-            disabled={!speak.enabled}
           />
           <span className="sw" />
           <span className="lab" style={{ fontSize: '0.84rem' }}>
@@ -105,9 +104,7 @@ export default function TachiePreview({
       <p className="hint">
         透過（市松）背景・基準 1920×1080 での見え方の目安です。
         {width == null && '（幅は原寸指定のため仮サイズで表示）'}
-        {alwaysShow
-          ? ' 個別出力は 1人=1ソースの常時表示。'
-          : ' まとめ版は通話中のユーザーだけが横並びで出ます。'}
+        {' 出力は個別（1人=1ソースの常時表示）。実際は 1人ずつ別ソースに出ます。'}
       </p>
     </div>
   )

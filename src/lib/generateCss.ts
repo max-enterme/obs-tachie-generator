@@ -72,9 +72,8 @@ const KEYFRAMES_BLINK = `@keyframes speak-blink {
   100% { opacity: 1; }
 }`
 
-/** 有効な演出を列挙する。空なら発話演出は出さない。 */
+/** 有効な演出を列挙する。空（3種すべて off）なら発話演出は出さない＝静止。 */
 function activeEffects(speak: SpeakEffect): Effect[] {
-  if (!speak.enabled) return []
   const effects: Effect[] = []
   if (speak.bounce && speak.jumpPx > 0) effects.push('jump')
   if (speak.outline) effects.push('light')
