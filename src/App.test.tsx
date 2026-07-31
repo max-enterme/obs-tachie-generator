@@ -14,11 +14,13 @@ describe('App', () => {
     expect(
       screen.getByRole('heading', { name: 'OBS 立ち絵ジェネレーター' }),
     ).toBeInTheDocument()
+    // ステップ①（ユーザー登録）が既定表示。登録が無い旨のメッセージが出る。
     expect(screen.getByText(/まだ登録がありません/)).toBeInTheDocument()
   })
 
   it('ユーザーを追加すると一覧と出力CSSに反映される', async () => {
     render(<App />)
+    // --- ステップ①：フォームからユーザーを追加 ---
     fireEvent.change(screen.getByLabelText('Discord ユーザーID'), {
       target: { value: '123456789012345678' },
     })
@@ -34,7 +36,11 @@ describe('App', () => {
     expect(
       await within(listPanel as HTMLElement).findByText('123456789012345678'),
     ).toBeInTheDocument()
-    // 出力CSSに body::after（常時表示・既定）が出る
+
+    // --- ステップ④（CSSを出力）へ移動して出力CSSを確認 ---
+    fireEvent.click(screen.getByRole('button', { name: /CSSを出力/ }))
+
+    // 既定は「個別（常時表示）」モード → body::after と埋め込み変数がその人のIDで出る
     const out = screen.getByRole('heading', { name: '出力 CSS' }).closest('.panel')!
     const textarea = within(out as HTMLElement).getByRole<HTMLTextAreaElement>('textbox')
     expect(textarea.value).toContain('body::after')

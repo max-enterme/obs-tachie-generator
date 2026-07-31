@@ -5,6 +5,11 @@ interface Props {
   onChange: (options: GenerateOptions) => void
 }
 
+/**
+ * 見た目・演出の設定（位置とサイズ / 発話演出 / その他）。
+ * 「個別・まとめ」の切替（旧 alwaysShow トグル）は出力ステップのモードカードへ移動したため、
+ * このパネルには含めない。
+ */
 export default function OptionsPanel({ options, onChange }: Props) {
   function set<K extends keyof GenerateOptions>(key: K, value: GenerateOptions[K]) {
     onChange({ ...options, [key]: value })
@@ -16,19 +21,11 @@ export default function OptionsPanel({ options, onChange }: Props) {
     onChange({ ...options, speak: { ...options.speak, [key]: value } })
   }
 
+  const speakOn = options.speak.enabled
+
   return (
     <div className="panel">
-      <h2>表示オプション</h2>
-
-      <label className="checkbox" style={{ marginBottom: 12 }}>
-        <input
-          type="checkbox"
-          checked={options.alwaysShow}
-          onChange={(e) => set('alwaysShow', e.target.checked)}
-        />
-        常時表示（通話に居なくても出す／body::after・1人=1ソース）
-      </label>
-
+      <div className="subhead">位置とサイズ</div>
       <div className="row">
         <div className="field">
           <label htmlFor="op-left">位置 left(px)</label>
@@ -63,58 +60,63 @@ export default function OptionsPanel({ options, onChange }: Props) {
         </div>
       </div>
 
-      <label className="checkbox" style={{ marginBottom: 12 }}>
+      <div className="subhead">発話演出（話すと反応）</div>
+      <label className="toggle" htmlFor="op-speak-enabled">
         <input
-          type="checkbox"
-          checked={options.dimWhenQuiet}
-          onChange={(e) => set('dimWhenQuiet', e.target.checked)}
-        />
-        静かな人を暗くする（発話していない立ち絵を暗く／話す人を目立たせる）
-      </label>
-
-      <label className="checkbox" style={{ margin: '4px 0 8px' }}>
-        <input
+          id="op-speak-enabled"
           type="checkbox"
           checked={options.speak.enabled}
           onChange={(e) => setSpeak('enabled', e.target.checked)}
         />
-        発話演出を出す（:has() で発話検知）
+        <span className="sw" />
+        <span className="lab">
+          発話演出を出す
+          <small>
+            <code>:has()</code> で発話を検知
+          </small>
+        </span>
       </label>
 
-      <div className="field" style={{ marginBottom: 8 }}>
-        <span>話すときの動き</span>
-        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-          <label className="checkbox">
-            <input
-              type="checkbox"
-              checked={options.speak.bounce}
-              disabled={!options.speak.enabled}
-              onChange={(e) => setSpeak('bounce', e.target.checked)}
-            />
-            ぴょこぴょこ
-          </label>
-          <label className="checkbox">
-            <input
-              type="checkbox"
-              checked={options.speak.outline}
-              disabled={!options.speak.enabled}
-              onChange={(e) => setSpeak('outline', e.target.checked)}
-            />
-            枠・後光
-          </label>
-          <label className="checkbox">
-            <input
-              type="checkbox"
-              checked={options.speak.blink}
-              disabled={!options.speak.enabled}
-              onChange={(e) => setSpeak('blink', e.target.checked)}
-            />
-            点滅
-          </label>
-        </div>
+      <div style={{ fontSize: '0.8rem', color: 'var(--muted)', margin: '10px 0 8px' }}>
+        話すときの動き
+      </div>
+      <div className="chips">
+        <button
+          type="button"
+          className="chip"
+          data-on={options.speak.bounce}
+          disabled={!speakOn}
+          aria-pressed={options.speak.bounce}
+          onClick={() => setSpeak('bounce', !options.speak.bounce)}
+        >
+          <span className="dot" />
+          ぴょこぴょこ
+        </button>
+        <button
+          type="button"
+          className="chip"
+          data-on={options.speak.outline}
+          disabled={!speakOn}
+          aria-pressed={options.speak.outline}
+          onClick={() => setSpeak('outline', !options.speak.outline)}
+        >
+          <span className="dot" />
+          枠・後光
+        </button>
+        <button
+          type="button"
+          className="chip"
+          data-on={options.speak.blink}
+          disabled={!speakOn}
+          aria-pressed={options.speak.blink}
+          onClick={() => setSpeak('blink', !options.speak.blink)}
+        >
+          <span className="dot" />
+          点滅
+        </button>
       </div>
 
-      <div className="row">
+      <div className="row" style={{ marginTop: 12 }}>
         <div className="field">
           <label htmlFor="op-jump">跳ね高さ(px)</label>
           <input
@@ -122,7 +124,7 @@ export default function OptionsPanel({ options, onChange }: Props) {
             type="number"
             min={0}
             value={options.speak.jumpPx}
-            disabled={!options.speak.enabled || !options.speak.bounce}
+            disabled={!speakOn || !options.speak.bounce}
             onChange={(e) => setSpeak('jumpPx', Number(e.target.value))}
           />
         </div>
@@ -133,7 +135,7 @@ export default function OptionsPanel({ options, onChange }: Props) {
             type="number"
             min={50}
             value={options.speak.durationMs}
-            disabled={!options.speak.enabled}
+            disabled={!speakOn}
             onChange={(e) => setSpeak('durationMs', Number(e.target.value))}
           />
         </div>
@@ -143,13 +145,28 @@ export default function OptionsPanel({ options, onChange }: Props) {
             id="op-color"
             type="color"
             value={options.speak.outlineColor ?? '#FFFFFF'}
-            disabled={!options.speak.enabled || !options.speak.outline}
+            disabled={!speakOn || !options.speak.outline}
             onChange={(e) => setSpeak('outlineColor', e.target.value)}
           />
         </div>
       </div>
 
-      <p className="hint">
+      <div className="subhead">その他</div>
+      <label className="toggle" htmlFor="op-dim">
+        <input
+          id="op-dim"
+          type="checkbox"
+          checked={options.dimWhenQuiet}
+          onChange={(e) => set('dimWhenQuiet', e.target.checked)}
+        />
+        <span className="sw" />
+        <span className="lab">
+          静かな人を暗くする
+          <small>発話していない立ち絵を暗く・話す人を目立たせる</small>
+        </span>
+      </label>
+
+      <p className="hint" style={{ marginTop: 12 }}>
         常時表示・発話検知は CSS <code>:has()</code> を使います。古い OBS(CEF) では効かないことがあります。
       </p>
     </div>
