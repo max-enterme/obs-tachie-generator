@@ -16,8 +16,6 @@ export interface TachieUser {
  * 「話すときの動き」は 枠(outline) / 点滅(blink) / ぴょこぴょこ(bounce) を個別に on/off できる。
  */
 export interface SpeakEffect {
-  /** 演出そのものの on/off。off なら発話検知の `:has()` ルールを出力しない。 */
-  enabled: boolean
   /** ぴょこぴょこ跳ね。 */
   bounce: boolean
   /** 跳ねる高さ(px)。 */
@@ -62,7 +60,6 @@ export interface AppState {
 
 /** 既定の演出。 */
 export const DEFAULT_SPEAK: SpeakEffect = {
-  enabled: true,
   bounce: true,
   jumpPx: 10,
   outline: true,

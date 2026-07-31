@@ -82,8 +82,11 @@ describe('generateStandaloneCss (常時表示 / body::after)', () => {
     expect(css).toContain('speak-jump')
   })
 
-  it('演出を全部切ると :has() ルールもキーフレームも出さない', () => {
-    const css = generateStandaloneCss(USER_A, opts({ speak: { enabled: false } }))
+  it('演出を全部切ると :has() ルールもキーフレームも出さない（＝静止）', () => {
+    const css = generateStandaloneCss(
+      USER_A,
+      opts({ speak: { bounce: false, outline: false, blink: false } }),
+    )
     expect(css).not.toContain(':has(')
     expect(css).not.toContain('@keyframes')
     // 立ち絵自体は残る

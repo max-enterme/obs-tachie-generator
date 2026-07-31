@@ -21,8 +21,6 @@ export default function OptionsPanel({ options, onChange }: Props) {
     onChange({ ...options, speak: { ...options.speak, [key]: value } })
   }
 
-  const speakOn = options.speak.enabled
-
   return (
     <div className="panel">
       <div className="subhead">位置とサイズ</div>
@@ -61,31 +59,14 @@ export default function OptionsPanel({ options, onChange }: Props) {
       </div>
 
       <div className="subhead">発話演出（話すと反応）</div>
-      <label className="toggle" htmlFor="op-speak-enabled">
-        <input
-          id="op-speak-enabled"
-          type="checkbox"
-          checked={options.speak.enabled}
-          onChange={(e) => setSpeak('enabled', e.target.checked)}
-        />
-        <span className="sw" />
-        <span className="lab">
-          発話演出を出す
-          <small>
-            <code>:has()</code> で発話を検知
-          </small>
-        </span>
-      </label>
-
-      <div style={{ fontSize: '0.8rem', color: 'var(--muted)', margin: '10px 0 8px' }}>
-        話すときの動き
+      <div style={{ fontSize: '0.8rem', color: 'var(--muted)', margin: '4px 0 8px' }}>
+        話すときの動き（すべて OFF なら静止）
       </div>
       <div className="chips">
         <button
           type="button"
           className="chip"
           data-on={options.speak.bounce}
-          disabled={!speakOn}
           aria-pressed={options.speak.bounce}
           onClick={() => setSpeak('bounce', !options.speak.bounce)}
         >
@@ -96,7 +77,6 @@ export default function OptionsPanel({ options, onChange }: Props) {
           type="button"
           className="chip"
           data-on={options.speak.outline}
-          disabled={!speakOn}
           aria-pressed={options.speak.outline}
           onClick={() => setSpeak('outline', !options.speak.outline)}
         >
@@ -107,7 +87,6 @@ export default function OptionsPanel({ options, onChange }: Props) {
           type="button"
           className="chip"
           data-on={options.speak.blink}
-          disabled={!speakOn}
           aria-pressed={options.speak.blink}
           onClick={() => setSpeak('blink', !options.speak.blink)}
         >
@@ -124,7 +103,7 @@ export default function OptionsPanel({ options, onChange }: Props) {
             type="number"
             min={0}
             value={options.speak.jumpPx}
-            disabled={!speakOn || !options.speak.bounce}
+            disabled={!options.speak.bounce}
             onChange={(e) => setSpeak('jumpPx', Number(e.target.value))}
           />
         </div>
@@ -135,7 +114,6 @@ export default function OptionsPanel({ options, onChange }: Props) {
             type="number"
             min={50}
             value={options.speak.durationMs}
-            disabled={!speakOn}
             onChange={(e) => setSpeak('durationMs', Number(e.target.value))}
           />
         </div>
@@ -145,7 +123,7 @@ export default function OptionsPanel({ options, onChange }: Props) {
             id="op-color"
             type="color"
             value={options.speak.outlineColor ?? '#FFFFFF'}
-            disabled={!speakOn || !options.speak.outline}
+            disabled={!options.speak.outline}
             onChange={(e) => setSpeak('outlineColor', e.target.value)}
           />
         </div>
