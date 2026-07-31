@@ -1,9 +1,16 @@
-import { useState, type CSSProperties } from 'react'
+import { type CSSProperties } from 'react'
 import type { GenerateOptions, TachieUser } from '../lib/types'
 
 interface Props {
   users: TachieUser[]
   options: GenerateOptions
+  /** 発話プレビューの再生状態（App で持ち上げ、sticky 小 と ステップ③大 で共有）。 */
+  speaking: boolean
+  onSpeakingChange: (speaking: boolean) => void
+  /** 見出し。既定は「プレビュー」。 */
+  title?: string
+  /** 発話プレビュートグルの id（複数描画時に一意化）。 */
+  toggleId?: string
 }
 
 /** プレビューの基準ビューポート（OBS ブラウザソースを 1920x1080 と仮定）。 */
@@ -16,11 +23,17 @@ const DEFAULT_PREVIEW_WIDTH = 384
  * OBS ビューポート風のプレビュー。透過を示す市松背景に、left/bottom/width で立ち絵を配置し、
  * 「発話プレビュー」で跳ね／白フチを再生する。位置・サイズは基準 1920x1080 に対する割合で描く
  * （実機のブラウザソース解像度により見え方は多少変わる）。
+ * `speaking` は親（App）が持つ状態で、sticky 小プレビューと ステップ③の大プレビューで同期する。
  */
-export default function TachiePreview({ users, options }: Props) {
-  const [speaking, setSpeaking] = useState(false)
-
-  const { left, bottom, width, dimWhenQuiet, speak } = options
+export default function TachiePreview({
+  users,
+  options,
+  speaking,
+  onSpeakingChange,
+  title = 'プレビュー',
+  toggleId = 'tp-speaking',
+}: Props) {
+  const { left, bottom, width, dimWhenQuiet, speak, alwaysShow } = options
   const leftPct = (left / REF_W) * 100
   const bottomPct = (bottom / REF_H) * 100
   const widthPct = ((width ?? DEFAULT_PREVIEW_WIDTH) / REF_W) * 100
@@ -57,15 +70,19 @@ export default function TachiePreview({ users, options }: Props) {
   return (
     <div className="panel">
       <div className="tp-head">
-        <h2 style={{ margin: 0 }}>プレビュー</h2>
-        <label className="checkbox">
+        <h2 style={{ margin: 0 }}>{title}</h2>
+        <label className="toggle" htmlFor={toggleId} style={{ padding: 0 }}>
           <input
+            id={toggleId}
             type="checkbox"
             checked={speaking}
-            onChange={(e) => setSpeaking(e.target.checked)}
+            onChange={(e) => onSpeakingChange(e.target.checked)}
             disabled={!speak.enabled}
           />
-          発話プレビュー
+          <span className="sw" />
+          <span className="lab" style={{ fontSize: '0.84rem' }}>
+            発話プレビュー
+          </span>
         </label>
       </div>
 
@@ -88,7 +105,7 @@ export default function TachiePreview({ users, options }: Props) {
       <p className="hint">
         透過（市松）背景・基準 1920×1080 での見え方の目安です。
         {width == null && '（幅は原寸指定のため仮サイズで表示）'}
-        {options.alwaysShow
+        {alwaysShow
           ? ' 個別出力は 1人=1ソースの常時表示。'
           : ' まとめ版は通話中のユーザーだけが横並びで出ます。'}
       </p>
