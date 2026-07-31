@@ -20,24 +20,32 @@ const DEFAULT_PREVIEW_WIDTH = 384
 export default function TachiePreview({ users, options }: Props) {
   const [speaking, setSpeaking] = useState(false)
 
-  const { left, bottom, width, speak } = options
+  const { left, bottom, width, dimWhenQuiet, speak } = options
   const leftPct = (left / REF_W) * 100
   const bottomPct = (bottom / REF_H) * 100
   const widthPct = ((width ?? DEFAULT_PREVIEW_WIDTH) / REF_W) * 100
 
   const anims: string[] = []
   if (speaking && speak.enabled) {
-    if (speak.jumpPx > 0) {
+    if (speak.bounce && speak.jumpPx > 0) {
       anims.push(`tachie-preview-jump ${speak.durationMs}ms infinite alternate ease-in-out`)
     }
-    if (speak.whiteOutline) {
+    if (speak.outline) {
       anims.push(`tachie-preview-light ${speak.durationMs}ms infinite alternate ease-in-out`)
     }
+    if (speak.blink) {
+      anims.push(`tachie-preview-blink ${speak.durationMs}ms infinite alternate ease-in-out`)
+    }
   }
+
+  // 静かな人を暗くする：発話プレビューが off のときだけ暗く（発話中はアニメ or 素の明るさ）
+  const dimmed = dimWhenQuiet && !speaking
 
   const imgStyle: CSSProperties = {
     width: `${widthPct}%`,
     ['--tp-jump' as string]: `${speak.jumpPx}px`,
+    ['--tp-outline' as string]: speak.outlineColor,
+    filter: dimmed ? 'brightness(0.5)' : undefined,
     animation: anims.length ? anims.join(', ') : undefined,
   }
 

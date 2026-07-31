@@ -286,18 +286,45 @@ textarea.css-out {
 
 @keyframes tachie-preview-light {
   0% {
-    filter: drop-shadow(0 0 2px #fff) drop-shadow(2px 2px 0 #fff)
-      drop-shadow(-2px -2px 0 #fff) drop-shadow(-2px 2px 0 #fff)
-      drop-shadow(2px -2px 0 #fff);
+    filter: drop-shadow(0 0 2px var(--tp-outline, #fff))
+      drop-shadow(2px 2px 0 var(--tp-outline, #fff))
+      drop-shadow(-2px -2px 0 var(--tp-outline, #fff))
+      drop-shadow(-2px 2px 0 var(--tp-outline, #fff))
+      drop-shadow(2px -2px 0 var(--tp-outline, #fff));
   }
   50% {
-    filter: drop-shadow(0 0 8px #fff) drop-shadow(2px 2px 0 #fff)
-      drop-shadow(-2px -2px 0 #fff) drop-shadow(-2px 2px 0 #fff)
-      drop-shadow(2px -2px 0 #fff);
+    filter: drop-shadow(0 0 8px var(--tp-outline, #fff))
+      drop-shadow(2px 2px 0 var(--tp-outline, #fff))
+      drop-shadow(-2px -2px 0 var(--tp-outline, #fff))
+      drop-shadow(-2px 2px 0 var(--tp-outline, #fff))
+      drop-shadow(2px -2px 0 var(--tp-outline, #fff));
   }
   100% {
-    filter: drop-shadow(0 0 2px #fff) drop-shadow(2px 2px 0 #fff)
-      drop-shadow(-2px -2px 0 #fff) drop-shadow(-2px 2px 0 #fff)
-      drop-shadow(2px -2px 0 #fff);
+    filter: drop-shadow(0 0 2px var(--tp-outline, #fff))
+      drop-shadow(2px 2px 0 var(--tp-outline, #fff))
+      drop-shadow(-2px -2px 0 var(--tp-outline, #fff))
+      drop-shadow(-2px 2px 0 var(--tp-outline, #fff))
+      drop-shadow(2px -2px 0 var(--tp-outline, #fff));
   }
+}
+
+@keyframes tachie-preview-blink {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+input[type='color'] {
+  width: 100%;
+  height: 38px;
+  padding: 2px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
 }

@@ -90,20 +90,57 @@ describe('generateStandaloneCss (常時表示 / body::after)', () => {
     expect(css).toContain('body::after {')
   })
 
-  it('白フチだけ・跳ねだけを個別に切り替えられる', () => {
+  it('枠・点滅・ぴょこぴょこを個別に切り替えられる', () => {
     const jumpOnly = generateStandaloneCss(
       USER_A,
-      opts({ speak: { whiteOutline: false } }),
+      opts({ speak: { outline: false, blink: false } }),
     )
     expect(jumpOnly).toContain('@keyframes speak-jump')
     expect(jumpOnly).not.toContain('@keyframes speak-light')
+    expect(jumpOnly).not.toContain('@keyframes speak-blink')
 
     const lightOnly = generateStandaloneCss(
       USER_A,
-      opts({ speak: { jumpPx: 0 } }),
+      opts({ speak: { bounce: false, blink: false } }),
     )
     expect(lightOnly).toContain('@keyframes speak-light')
     expect(lightOnly).not.toContain('@keyframes speak-jump')
+
+    const blinkOnly = generateStandaloneCss(
+      USER_A,
+      opts({ speak: { bounce: false, outline: false, blink: true } }),
+    )
+    expect(blinkOnly).toContain('@keyframes speak-blink')
+    expect(blinkOnly).toContain('speak-blink')
+    expect(blinkOnly).not.toContain('@keyframes speak-jump')
+    expect(blinkOnly).not.toContain('@keyframes speak-light')
+  })
+
+  it('枠・後光の色を反映し、不正な色は白に倒す', () => {
+    const red = generateStandaloneCss(USER_A, opts({ speak: { outlineColor: '#ff0000' } }))
+    expect(red).toContain('drop-shadow(0 0 2px #ff0000)')
+    const bad = generateStandaloneCss(
+      USER_A,
+      opts({ speak: { outlineColor: 'red; }body{display:none' } }),
+    )
+    expect(bad).toContain('drop-shadow(0 0 2px #FFFFFF)')
+    expect(bad).not.toContain('display:none')
+  })
+
+  it('静かな人を暗くする：非発話は暗く・発話で明るく戻す', () => {
+    const css = generateStandaloneCss(USER_A, opts({ dimWhenQuiet: true }))
+    // body::after 既定は暗い
+    expect(css).toMatch(/body::after \{[^}]*filter: brightness\(50%\)/)
+    // outline(light) アニメが filter を持つので発話中は明るく戻る（明示 brightness は不要）
+    expect(css).toContain(':has(')
+  })
+
+  it('静かな人を暗くする（点滅のみ）：発話ルールで明るさを明示的に戻す', () => {
+    const css = generateStandaloneCss(
+      USER_A,
+      opts({ dimWhenQuiet: true, speak: { bounce: false, outline: false, blink: true } }),
+    )
+    expect(css).toMatch(/:has\([^)]*\)::after \{[^}]*filter: brightness\(100%\)/)
   })
 })
 
@@ -130,6 +167,12 @@ describe('generateCombinedCss (まとめ / per-img)', () => {
     const css = generateCombinedCss([USER_A], opts({ speak: { jumpPx: 10 } }))
     expect(css).toContain('@keyframes speak-jump')
     expect(css).toMatch(/bottom: 10px;/)
+  })
+
+  it('静かな人を暗くする：Voice_avatar__ を暗くし発話クラスで戻す', () => {
+    const css = generateCombinedCss([USER_A, USER_B], opts({ dimWhenQuiet: true }))
+    expect(css).toMatch(/\[class\*="Voice_avatar__"\] \{\s*filter: brightness\(50%\)/)
+    expect(css).toContain('[class*="Voice_avatarSpeaking__"] {')
   })
 })
 

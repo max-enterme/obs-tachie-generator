@@ -63,7 +63,16 @@ export default function OptionsPanel({ options, onChange }: Props) {
         </div>
       </div>
 
-      <label className="checkbox" style={{ margin: '4px 0 12px' }}>
+      <label className="checkbox" style={{ marginBottom: 12 }}>
+        <input
+          type="checkbox"
+          checked={options.dimWhenQuiet}
+          onChange={(e) => set('dimWhenQuiet', e.target.checked)}
+        />
+        静かな人を暗くする（発話していない立ち絵を暗く／話す人を目立たせる）
+      </label>
+
+      <label className="checkbox" style={{ margin: '4px 0 8px' }}>
         <input
           type="checkbox"
           checked={options.speak.enabled}
@@ -72,20 +81,53 @@ export default function OptionsPanel({ options, onChange }: Props) {
         発話演出を出す（:has() で発話検知）
       </label>
 
+      <div className="field" style={{ marginBottom: 8 }}>
+        <span>話すときの動き</span>
+        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+          <label className="checkbox">
+            <input
+              type="checkbox"
+              checked={options.speak.bounce}
+              disabled={!options.speak.enabled}
+              onChange={(e) => setSpeak('bounce', e.target.checked)}
+            />
+            ぴょこぴょこ
+          </label>
+          <label className="checkbox">
+            <input
+              type="checkbox"
+              checked={options.speak.outline}
+              disabled={!options.speak.enabled}
+              onChange={(e) => setSpeak('outline', e.target.checked)}
+            />
+            枠・後光
+          </label>
+          <label className="checkbox">
+            <input
+              type="checkbox"
+              checked={options.speak.blink}
+              disabled={!options.speak.enabled}
+              onChange={(e) => setSpeak('blink', e.target.checked)}
+            />
+            点滅
+          </label>
+        </div>
+      </div>
+
       <div className="row">
         <div className="field">
-          <label htmlFor="op-jump">跳ね高さ(px)・0 でなし</label>
+          <label htmlFor="op-jump">跳ね高さ(px)</label>
           <input
             id="op-jump"
             type="number"
             min={0}
             value={options.speak.jumpPx}
-            disabled={!options.speak.enabled}
+            disabled={!options.speak.enabled || !options.speak.bounce}
             onChange={(e) => setSpeak('jumpPx', Number(e.target.value))}
           />
         </div>
         <div className="field">
-          <label htmlFor="op-dur">周期(ms)</label>
+          <label htmlFor="op-dur">動きの速さ・周期(ms)</label>
           <input
             id="op-dur"
             type="number"
@@ -95,16 +137,15 @@ export default function OptionsPanel({ options, onChange }: Props) {
             onChange={(e) => setSpeak('durationMs', Number(e.target.value))}
           />
         </div>
-        <div className="field" style={{ justifyContent: 'flex-end' }}>
-          <label className="checkbox">
-            <input
-              type="checkbox"
-              checked={options.speak.whiteOutline}
-              disabled={!options.speak.enabled}
-              onChange={(e) => setSpeak('whiteOutline', e.target.checked)}
-            />
-            白フチ
-          </label>
+        <div className="field">
+          <label htmlFor="op-color">枠・後光の色</label>
+          <input
+            id="op-color"
+            type="color"
+            value={options.speak.outlineColor ?? '#FFFFFF'}
+            disabled={!options.speak.enabled || !options.speak.outline}
+            onChange={(e) => setSpeak('outlineColor', e.target.value)}
+          />
         </div>
       </div>
 

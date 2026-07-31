@@ -11,14 +11,23 @@ export interface TachieUser {
   imageUrl: string
 }
 
-/** 発話中（`Voice_avatarSpeaking__` 付与）に立ち絵へ乗せる演出。 */
+/**
+ * 発話中（`Voice_avatarSpeaking__` 付与）に立ち絵へ乗せる演出。
+ * 「話すときの動き」は 枠(outline) / 点滅(blink) / ぴょこぴょこ(bounce) を個別に on/off できる。
+ */
 export interface SpeakEffect {
   /** 演出そのものの on/off。off なら発話検知の `:has()` ルールを出力しない。 */
   enabled: boolean
-  /** 跳ねる高さ(px)。0 で跳ねなし。 */
+  /** ぴょこぴょこ跳ね。 */
+  bounce: boolean
+  /** 跳ねる高さ(px)。 */
   jumpPx: number
-  /** 白フチ（drop-shadow）を出すか。 */
-  whiteOutline: boolean
+  /** 枠・後光（drop-shadow のフチ）を出すか。 */
+  outline: boolean
+  /** 枠・後光の色（CSS カラー。既定 `#FFFFFF`）。 */
+  outlineColor: string
+  /** 点滅（opacity のパルス）を出すか。 */
+  blink: boolean
   /** アニメーション周期(ms)。 */
   durationMs: number
 }
@@ -36,9 +45,14 @@ export interface GenerateOptions {
   bottom: number
   /** 立ち絵の幅(px)。未指定で画像原寸。 */
   width?: number
+  /** 静かな人（発話していない立ち絵）を暗くして、話している人を目立たせる。 */
+  dimWhenQuiet: boolean
   /** 発話演出。 */
   speak: SpeakEffect
 }
+
+/** 「静かな人を暗くする」で非発話時に掛ける明るさ(%)。 */
+export const DIM_BRIGHTNESS_PCT = 50
 
 /** UI 全体の永続化対象。 */
 export interface AppState {
@@ -49,8 +63,11 @@ export interface AppState {
 /** 既定の演出。 */
 export const DEFAULT_SPEAK: SpeakEffect = {
   enabled: true,
+  bounce: true,
   jumpPx: 10,
-  whiteOutline: true,
+  outline: true,
+  outlineColor: '#FFFFFF',
+  blink: false,
   durationMs: 750,
 }
 
@@ -60,5 +77,6 @@ export const DEFAULT_OPTIONS: GenerateOptions = {
   left: 16,
   bottom: 16,
   width: undefined,
+  dimWhenQuiet: false,
   speak: DEFAULT_SPEAK,
 }
