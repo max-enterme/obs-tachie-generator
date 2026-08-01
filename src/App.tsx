@@ -1,37 +1,71 @@
 import { useEffect, useState } from 'react'
-import UserForm from './ui/UserForm'
-import UserList from './ui/UserList'
-import OptionsPanel from './ui/OptionsPanel'
+import AppUserForm from './ui/AppUserForm'
+import AppUserList from './ui/AppUserList'
+import PresetPanel from './ui/PresetPanel'
+import PairingPanel from './ui/PairingPanel'
 import OutputPanel from './ui/OutputPanel'
 import TachiePreview from './ui/TachiePreview'
 import Stepper, { type StepDef } from './ui/Stepper'
 import { loadState, saveState } from './lib/state'
-import type { GenerateOptions, TachieUser } from './lib/types'
+import { makeDefaultPreset, newId, type AppUser, type Pairing, type Preset } from './lib/types'
 
 const STEPS: StepDef[] = [
-  { key: 'ユーザー登録', desc: 'ID・名前・立ち絵' },
-  { key: '見た目・演出', desc: '位置 / サイズ / 発話' },
-  { key: 'プレビュー確認', desc: '貼る前にチェック' },
-  { key: 'CSSを出力', desc: 'コピー / DL / 貼付' },
+  { key: 'ユーザー', desc: 'Discord ID・名前' },
+  { key: '立ち絵・演出', desc: 'プリセットを用意' },
+  { key: '組み合わせ', desc: 'ペア＆プレビュー' },
+  { key: '出力', desc: 'ペアごとに CSS' },
 ]
 
 export default function App() {
-  const [users, setUsers] = useState<TachieUser[]>(() => loadState().users)
-  const [options, setOptions] = useState<GenerateOptions>(() => loadState().options)
+  const [initial] = useState(loadState)
+  const [users, setUsers] = useState<AppUser[]>(initial.users)
+  const [presets, setPresets] = useState<Preset[]>(initial.presets)
+  const [pairings, setPairings] = useState<Pairing[]>(initial.pairings)
   const [step, setStep] = useState(0)
-  // 発話プレビューの再生状態は App で持つ（sticky 小 と ステップ③大 で共有）。
   const [speaking, setSpeaking] = useState(false)
+  // プレビューに映すプリセット（②の編集中 / ③で選択中）。未指定なら先頭にフォールバック。
+  const [focusPresetId, setFocusPresetId] = useState<string | null>(null)
 
   useEffect(() => {
-    saveState({ users, options })
-  }, [users, options])
+    saveState({ users, presets, pairings })
+  }, [users, presets, pairings])
 
-  function addUser(user: TachieUser) {
+  const focusedPreset =
+    presets.find((p) => p.id === focusPresetId) ?? presets[0] ?? null
+
+  // --- users ---
+  function addUser(user: AppUser) {
     setUsers((prev) => [...prev.filter((u) => u.id !== user.id), user])
   }
-
   function removeUser(id: string) {
     setUsers((prev) => prev.filter((u) => u.id !== id))
+    setPairings((prev) => prev.filter((p) => p.userId !== id))
+  }
+
+  // --- presets ---
+  function addPreset() {
+    const p = makeDefaultPreset(newId())
+    setPresets((prev) => [...prev, p])
+    setFocusPresetId(p.id)
+  }
+  function changePreset(next: Preset) {
+    setPresets((prev) => prev.map((p) => (p.id === next.id ? next : p)))
+  }
+  function removePreset(id: string) {
+    setPresets((prev) => prev.filter((p) => p.id !== id))
+    setPairings((prev) => prev.filter((p) => p.presetId !== id))
+    setFocusPresetId((cur) => (cur === id ? null : cur))
+  }
+
+  // --- pairings ---
+  function addPairing(pair: Pairing) {
+    setPairings((prev) => [...prev, pair])
+  }
+  function removePairing(index: number) {
+    setPairings((prev) => prev.filter((_, i) => i !== index))
+  }
+  function changePairingUser(index: number, userId: string) {
+    setPairings((prev) => prev.map((p, i) => (i === index ? { ...p, userId } : p)))
   }
 
   function goto(next: number) {
@@ -42,7 +76,9 @@ export default function App() {
     <div className="app">
       <header>
         <h1>OBS 立ち絵ジェネレーター</h1>
-        <p>Discord Streamkit 用のカスタムCSSを 4ステップで作成します。</p>
+        <p>
+          「誰（Discord ID）」と「見た目（立ち絵プリセット）」を別々に用意して、出力時に組み合わせます。
+        </p>
       </header>
 
       <Stepper steps={STEPS} current={step} onJump={goto} />
@@ -56,14 +92,13 @@ export default function App() {
                 <div>
                   <h2>ユーザー登録</h2>
                   <p className="lead">
-                    立ち絵を出したい人を登録します。Discord ユーザーID・表示名（メモ）・立ち絵画像。
-                    画像はアップロードで <code>data URI</code> 埋め込み、または画像URL（許可ホストは
-                    そのまま／他は自動で埋め込み）。
+                    立ち絵を出したい人（Discord ユーザーID＋表示名メモ）を登録します。
+                    立ち絵画像はここでは持たせません（見た目はステップ②）。
                   </p>
                 </div>
               </div>
-              <UserForm onAdd={addUser} />
-              <UserList users={users} onRemove={removeUser} />
+              <AppUserForm onAdd={addUser} />
+              <AppUserList users={users} onRemove={removeUser} />
             </section>
           )}
 
@@ -72,13 +107,21 @@ export default function App() {
               <div className="step-head">
                 <span className="step-num">2</span>
                 <div>
-                  <h2>見た目・演出の設定</h2>
+                  <h2>立ち絵・演出（プリセット）</h2>
                   <p className="lead">
-                    位置とサイズ、話したときの演出をまとめて設定します。変更は右のプレビューに即反映されます。
+                    再利用する見た目を作ります。立ち絵画像＋位置/サイズ＋発話演出を1セットに。
+                    複数作って使い分けられます。変更は右のプレビューに即反映されます。
                   </p>
                 </div>
               </div>
-              <OptionsPanel options={options} onChange={setOptions} />
+              <PresetPanel
+                presets={presets}
+                editingId={focusedPreset?.id ?? null}
+                onSelect={setFocusPresetId}
+                onAdd={addPreset}
+                onRemove={removePreset}
+                onChange={changePreset}
+              />
             </section>
           )}
 
@@ -87,16 +130,24 @@ export default function App() {
               <div className="step-head">
                 <span className="step-num">3</span>
                 <div>
-                  <h2>プレビューで確認</h2>
+                  <h2>組み合わせ & プレビュー</h2>
                   <p className="lead">
-                    OBS に貼る前に、位置・サイズ・発話演出が思い通りか確認します。「発話プレビュー」で
-                    動きを再生できます。
+                    ユーザーとプリセットを選んでペアを作ります。出力はペアごとに 1 ソース。
+                    貼る前にプレビューで確認できます。
                   </p>
                 </div>
               </div>
-              <TachiePreview
+              <PairingPanel
                 users={users}
-                options={options}
+                presets={presets}
+                pairings={pairings}
+                onAdd={addPairing}
+                onRemove={removePairing}
+                onChangeUser={changePairingUser}
+                onFocusPreset={setFocusPresetId}
+              />
+              <TachiePreview
+                preset={focusedPreset}
                 speaking={speaking}
                 onSpeakingChange={setSpeaking}
                 title="プレビュー（確認用・大）"
@@ -112,12 +163,12 @@ export default function App() {
                 <div>
                   <h2>CSS を出力して OBS に貼る</h2>
                   <p className="lead">
-                    人ごとの CSS をコピー / ダウンロードし、OBS のブラウザソース（1人=1ソース）の
+                    ペアごとの CSS をコピー / ダウンロードし、OBS のブラウザソース（1ペア=1ソース）の
                     カスタムCSSに貼ります。
                   </p>
                 </div>
               </div>
-              <OutputPanel users={users} options={options} />
+              <OutputPanel users={users} presets={presets} pairings={pairings} />
             </section>
           )}
 
@@ -145,8 +196,7 @@ export default function App() {
 
         <aside className="preview-col">
           <TachiePreview
-            users={users}
-            options={options}
+            preset={focusedPreset}
             speaking={speaking}
             onSpeakingChange={setSpeaking}
             title="プレビュー"

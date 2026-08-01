@@ -52,10 +52,94 @@ export interface GenerateOptions {
 /** 「静かな人を暗くする」で非発話時に掛ける明るさ(%)。 */
 export const DIM_BRIGHTNESS_PCT = 50
 
-/** UI 全体の永続化対象。 */
+/**
+ * アプリ層の「誰」。Discord 識別子のみを持ち、見た目（画像・位置・演出）は持たない。
+ * 見た目は {@link Preset} 側に置き、出力時に {@link Pairing} で組み合わせる。
+ */
+export interface AppUser {
+  /** Discord ユーザーID（数字のみの文字列）。 */
+  id: string
+  /** 表示名（メモ用）。 */
+  name: string
+}
+
+/**
+ * 再利用する「見た目・演出」。立ち絵画像＋位置/サイズ＋発話演出を1セットに束ねる。
+ * `id` はアプリ内キー（Discord ID ではない）。IDだけ差し替えても見た目は据え置きにできる。
+ */
+export interface Preset {
+  /** アプリ内キー（{@link newId} 生成）。 */
+  id: string
+  /** プリセット名（メモ用）。 */
+  name: string
+  /** 立ち絵画像（data URI 推奨 / 外部URLも可）。 */
+  imageUrl: string
+  /** 立ち絵の左端(px)。 */
+  left: number
+  /** 立ち絵の下端(px)。 */
+  bottom: number
+  /** 立ち絵の幅(px)。未指定で画像原寸。 */
+  width?: number
+  /** 静かな人（発話していない立ち絵）を暗くする。 */
+  dimWhenQuiet: boolean
+  /** 発話演出。 */
+  speak: SpeakEffect
+}
+
+/** 出力する「ユーザー × プリセット」の明示ペア（多対多）。 */
+export interface Pairing {
+  /** {@link AppUser.id} 参照。 */
+  userId: string
+  /** {@link Preset.id} 参照。 */
+  presetId: string
+}
+
+/** UI 全体の永続化対象。ユーザー・プリセット・ペアを独立に持つ。 */
 export interface AppState {
-  users: TachieUser[]
-  options: GenerateOptions
+  users: AppUser[]
+  presets: Preset[]
+  pairings: Pairing[]
+}
+
+/** プリセットを generateCss の {@link GenerateOptions} に落とす（常に個別＝常時表示）。 */
+export function presetToOptions(p: Preset): GenerateOptions {
+  return {
+    alwaysShow: true,
+    left: p.left,
+    bottom: p.bottom,
+    width: p.width,
+    dimWhenQuiet: p.dimWhenQuiet,
+    speak: p.speak,
+  }
+}
+
+/** ユーザー（誰）とプリセット（見た目）を合成して generateCss の描画入力 {@link TachieUser} を作る。 */
+export function renderUser(u: AppUser, p: Preset): TachieUser {
+  return { id: u.id, name: u.name, imageUrl: p.imageUrl }
+}
+
+/** 既定値（DEFAULT_OPTIONS の位置/サイズ/演出＋空 image・空 name）の新規プリセット。 */
+export function makeDefaultPreset(id: string): Preset {
+  return {
+    id,
+    name: '',
+    imageUrl: '',
+    left: DEFAULT_OPTIONS.left,
+    bottom: DEFAULT_OPTIONS.bottom,
+    width: DEFAULT_OPTIONS.width,
+    dimWhenQuiet: DEFAULT_OPTIONS.dimWhenQuiet,
+    speak: { ...DEFAULT_SPEAK },
+  }
+}
+
+/**
+ * アプリ内キーを生成する（ブラウザ実行前提）。
+ * ※ 決定的でなければならない箇所（state.ts の normalizeState 等）では使わないこと。
+ */
+export function newId(): string {
+  const c = globalThis.crypto
+  if (c && typeof c.randomUUID === 'function') return c.randomUUID()
+  return 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2)
 }
 
 /** 既定の演出。 */

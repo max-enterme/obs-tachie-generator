@@ -1,20 +1,20 @@
-import type { TachieUser } from '../lib/types'
+import type { AppUser } from '../lib/types'
 
 interface Props {
-  users: TachieUser[]
+  users: AppUser[]
   onRemove: (id: string) => void
 }
 
-export default function UserList({ users, onRemove }: Props) {
+/** 登録済みユーザー（誰）の一覧。立ち絵は持たないので ID と名前のみ。 */
+export default function AppUserList({ users, onRemove }: Props) {
   return (
     <div className="panel">
       <h2>登録ユーザー（{users.length}）</h2>
       {users.length === 0 ? (
-        <p className="empty">まだ登録がありません。左のフォームから追加してください。</p>
+        <p className="empty">まだ登録がありません。上のフォームから追加してください。</p>
       ) : (
         users.map((u) => (
           <div className="user-item" key={u.id}>
-            <img src={u.imageUrl} alt={u.name || u.id} />
             <div className="meta">
               <div className="name">{u.name || '(名前なし)'}</div>
               <div className="id">{u.id}</div>
