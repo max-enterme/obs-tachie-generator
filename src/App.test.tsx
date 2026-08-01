@@ -18,18 +18,14 @@ describe('App', () => {
     expect(screen.getByText(/まだ登録がありません/)).toBeInTheDocument()
   })
 
-  it('ユーザーを追加すると一覧と出力CSSに反映される', async () => {
+  it('ユーザー追加 → プリセット追加 → ペア作成で出力CSSに反映される', async () => {
     render(<App />)
-    // --- ステップ①：フォームからユーザーを追加 ---
+
+    // --- ステップ①：ユーザー（誰）を追加 ---
     fireEvent.change(screen.getByLabelText('Discord ユーザーID'), {
       target: { value: '649228696229511179' },
     })
-    fireEvent.change(screen.getByLabelText(/画像URL/), {
-      target: { value: 'data:image/png;base64,AAAA' },
-    })
     fireEvent.click(screen.getByRole('button', { name: '追加' }))
-
-    // 一覧に出る（登録ユーザーパネル内で確認、追加は非同期なので findBy で待つ）
     const listPanel = screen
       .getByRole('heading', { name: /登録ユーザー/ })
       .closest('.panel')!
@@ -37,13 +33,63 @@ describe('App', () => {
       await within(listPanel as HTMLElement).findByText('649228696229511179'),
     ).toBeInTheDocument()
 
-    // --- ステップ④（CSSを出力）へ移動して出力CSSを確認 ---
-    fireEvent.click(screen.getByRole('button', { name: /CSSを出力/ }))
+    // --- ステップ②：プリセット（見た目）を追加して画像を設定 ---
+    fireEvent.click(screen.getByRole('button', { name: /次へ/ }))
+    fireEvent.click(screen.getByRole('button', { name: /新規プリセット/ }))
+    fireEvent.change(screen.getByLabelText(/画像URL/), {
+      target: { value: 'data:image/png;base64,AAAA' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /画像URLを反映/ }))
+    expect(await screen.findByText(/画像を設定しました/)).toBeInTheDocument()
 
-    // 出力は個別（常時表示）のみ → body::after と埋め込み変数がその人のIDで出る
+    // --- ステップ③：ユーザー × プリセットのペアを作る ---
+    fireEvent.click(screen.getByRole('button', { name: /次へ/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'ペアを追加' }))
+    // ペア行が出る（ユーザー差し替え用セレクト）
+    expect(await screen.findByLabelText('ペア1のユーザー')).toBeInTheDocument()
+
+    // --- ステップ④：出力CSSにそのユーザーIDの body::after ＋ 埋め込み変数が出る ---
+    fireEvent.click(screen.getByRole('button', { name: /次へ/ }))
     const out = screen.getByRole('heading', { name: /出力 CSS/ }).closest('.panel')!
     const textarea = within(out as HTMLElement).getByRole<HTMLTextAreaElement>('textbox')
     expect(textarea.value).toContain('body::after')
     expect(textarea.value).toContain('--img-stand-url-649228696229511179')
+  })
+
+  it('ペアのユーザーIDを差し替えると、出力のIDだけ変わり画像（プリセット）は据え置き', async () => {
+    render(<App />)
+
+    // --- ①：2人登録（A / B）---
+    const idInput = () => screen.getByLabelText('Discord ユーザーID')
+    const addBtn = () => screen.getByRole('button', { name: '追加' })
+    fireEvent.change(idInput(), { target: { value: '111111111111111111' } })
+    fireEvent.click(addBtn())
+    fireEvent.change(idInput(), { target: { value: '222222222222222222' } })
+    fireEvent.click(addBtn())
+
+    // --- ②：プリセット＋画像 ---
+    fireEvent.click(screen.getByRole('button', { name: /次へ/ }))
+    fireEvent.click(screen.getByRole('button', { name: /新規プリセット/ }))
+    fireEvent.change(screen.getByLabelText(/画像URL/), {
+      target: { value: 'data:image/png;base64,ZZZZ' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /画像URLを反映/ }))
+    expect(await screen.findByText(/画像を設定しました/)).toBeInTheDocument()
+
+    // --- ③：ペアを作り、ユーザーを B に差し替える ---
+    fireEvent.click(screen.getByRole('button', { name: /次へ/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'ペアを追加' }))
+    const pairUserSelect = (await screen.findByLabelText(
+      'ペア1のユーザー',
+    )) as HTMLSelectElement
+    fireEvent.change(pairUserSelect, { target: { value: '222222222222222222' } })
+
+    // --- ④：出力は B のID・画像は据え置き（プリセット由来）---
+    fireEvent.click(screen.getByRole('button', { name: /次へ/ }))
+    const out = screen.getByRole('heading', { name: /出力 CSS/ }).closest('.panel')!
+    const textarea = within(out as HTMLElement).getByRole<HTMLTextAreaElement>('textbox')
+    expect(textarea.value).toContain('--img-stand-url-222222222222222222')
+    expect(textarea.value).not.toContain('--img-stand-url-111111111111111111')
+    expect(textarea.value).toContain('data:image/png;base64,ZZZZ')
   })
 })

@@ -23,8 +23,9 @@ test: npm run typecheck && npm run lint && npx vitest run
 | `src/lib/image.ts` | `File → dataURI`(任意リサイズ・PNG/JPEG) |
 | `src/lib/imageSource.ts` | 画像URLの解決(Streamkit CSP 許可ホスト判定 / URL→dataURI / 自動・URL・dataURI モード)。**判定は純粋関数でテスト** |
 | `src/ui/TachiePreview.tsx` | 透過市松の OBS ビューポート風プレビュー(位置・サイズ・発話演出の確認) |
-| `src/lib/state.ts` | 設定の localStorage / URL 永続化 |
-| `src/ui/*` | UserList / UserForm / OptionsPanel / OutputPanel(コピー・per-person DL・まとめDL) |
+| `src/lib/types.ts` | `AppUser{id,name}` / `Preset{画像+位置/サイズ+演出}` / `Pairing{userId,presetId}` を分離。`renderUser`/`presetToOptions` で generateCss へ合成 |
+| `src/lib/state.ts` | `{users,presets,pairings}` の localStorage 永続化(純粋 `normalizeState`：旧形破棄・壊れpairing除去) |
+| `src/ui/*` | AppUserForm / AppUserList / PresetPanel(画像+演出) / PairingPanel(ペア作成・ID差し替え) / OutputPanel(ペアごと個別 DL/コピー) |
 | ルート | Vite + React + TS 雛形、`typecheck`/`lint`/`vitest` スクリプト、CI |
 | デプロイ | Cloudflare Pages(ビルド `npm run build` → `dist/`) |
 

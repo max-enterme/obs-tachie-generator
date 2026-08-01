@@ -1,9 +1,9 @@
 import { type CSSProperties } from 'react'
-import type { GenerateOptions, TachieUser } from '../lib/types'
+import type { Preset } from '../lib/types'
 
 interface Props {
-  users: TachieUser[]
-  options: GenerateOptions
+  /** プレビューに映すプリセット（見た目の source）。null なら空ビューポート。 */
+  preset: Preset | null
   /** 発話プレビューの再生状態（App で持ち上げ、sticky 小 と ステップ③大 で共有）。 */
   speaking: boolean
   onSpeakingChange: (speaking: boolean) => void
@@ -20,26 +20,29 @@ const REF_H = 1080
 const DEFAULT_PREVIEW_WIDTH = 384
 
 /**
- * OBS ビューポート風のプレビュー。透過を示す市松背景に、left/bottom/width で立ち絵を配置し、
- * 「発話プレビュー」で跳ね／白フチを再生する。位置・サイズは基準 1920x1080 に対する割合で描く
- * （実機のブラウザソース解像度により見え方は多少変わる）。
+ * OBS ビューポート風のプレビュー。透過を示す市松背景に、プリセットの立ち絵を left/bottom/width で配置し、
+ * 「発話プレビュー」で跳ね／白フチ／点滅を再生する。画像は<b>プリセット由来</b>で、ユーザーIDは見た目に出ない。
  * `speaking` は親（App）が持つ状態で、sticky 小プレビューと ステップ③の大プレビューで同期する。
  */
 export default function TachiePreview({
-  users,
-  options,
+  preset,
   speaking,
   onSpeakingChange,
   title = 'プレビュー',
   toggleId = 'tp-speaking',
 }: Props) {
-  const { left, bottom, width, dimWhenQuiet, speak } = options
+  const left = preset?.left ?? 0
+  const bottom = preset?.bottom ?? 0
+  const width = preset?.width
+  const speak = preset?.speak
+  const dimWhenQuiet = preset?.dimWhenQuiet ?? false
+
   const leftPct = (left / REF_W) * 100
   const bottomPct = (bottom / REF_H) * 100
   const widthPct = ((width ?? DEFAULT_PREVIEW_WIDTH) / REF_W) * 100
 
   const anims: string[] = []
-  if (speaking) {
+  if (speaking && speak) {
     if (speak.bounce && speak.jumpPx > 0) {
       anims.push(`tachie-preview-jump ${speak.durationMs}ms infinite alternate ease-in-out`)
     }
@@ -54,10 +57,10 @@ export default function TachiePreview({
   // 静かな人を暗くする：発話プレビューが off のときだけ暗く（発話中はアニメ or 素の明るさ）
   const dimmed = dimWhenQuiet && !speaking
 
-  const imgStyle: CSSProperties = {
+  const figStyle: CSSProperties = {
     width: `${widthPct}%`,
-    ['--tp-jump' as string]: `${speak.jumpPx}px`,
-    ['--tp-outline' as string]: speak.outlineColor,
+    ['--tp-jump' as string]: `${speak?.jumpPx ?? 0}px`,
+    ['--tp-outline' as string]: speak?.outlineColor ?? '#FFFFFF',
     filter: dimmed ? 'brightness(0.5)' : undefined,
     animation: anims.length ? anims.join(', ') : undefined,
   }
@@ -86,25 +89,29 @@ export default function TachiePreview({
       </div>
 
       <div className="tp-viewport" aria-label="立ち絵プレビュー">
-        {users.length > 0 && (
+        {preset && (
           <div className="tp-row" style={rowStyle}>
-            {users.map((u) => (
+            {preset.imageUrl ? (
               <img
-                key={u.id}
                 className="tp-img"
-                style={imgStyle}
-                src={u.imageUrl}
-                alt={u.name || u.id}
+                style={figStyle}
+                src={preset.imageUrl}
+                alt={preset.name || 'プリセット'}
               />
-            ))}
+            ) : (
+              <div className="tp-placeholder" style={figStyle} aria-label="画像未設定">
+                <span>立ち絵</span>
+              </div>
+            )}
           </div>
         )}
       </div>
 
       <p className="hint">
         透過（市松）背景・基準 1920×1080 での見え方の目安です。
-        {width == null && '（幅は原寸指定のため仮サイズで表示）'}
-        {' 出力は個別（1人=1ソースの常時表示）。実際は 1人ずつ別ソースに出ます。'}
+        {preset == null && ' プリセットを選ぶと、その見た目を表示します。'}
+        {preset && width == null && '（幅は原寸指定のため仮サイズで表示）'}
+        {preset && ' 出力は個別（1ペア=1ソースの常時表示）。'}
       </p>
     </div>
   )
