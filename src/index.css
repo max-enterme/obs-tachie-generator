@@ -521,7 +521,7 @@ button:disabled {
 /* ===== Preset list & editor ===== */
 .preset-list {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 8px;
   margin-bottom: 14px;
 }
@@ -530,6 +530,7 @@ button:disabled {
   display: flex;
   align-items: center;
   gap: 4px;
+  width: 100%;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--panel-2);
@@ -545,6 +546,8 @@ button:disabled {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
   border: 0;
   background: transparent;
   color: inherit;
@@ -857,6 +860,20 @@ textarea.css-out {
   justify-content: space-between;
   gap: 8px;
   margin-bottom: 8px;
+}
+
+.tp-status {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
+  font-size: 0.72rem;
+  color: var(--text);
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 10px;
+  pointer-events: none;
 }
 
 .tp-viewport {
