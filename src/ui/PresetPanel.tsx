@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { fileToDataUri, isWithinSizeLimit } from '../lib/image'
 import { resolveImageSource, type ImageSourceMode } from '../lib/imageSource'
-import type { Preset, SpeakEffect } from '../lib/types'
+import { resetPresetOptions, type Preset, type SpeakEffect } from '../lib/types'
 
 interface Props {
   presets: Preset[]
@@ -12,8 +12,8 @@ interface Props {
   onChange: (preset: Preset) => void
 }
 
-/** 最大埋め込み幅の既定（CSS 肥大を抑える）。0 で原寸。 */
-const DEFAULT_MAX_WIDTH = 960
+/** 最大埋め込み幅の既定。0 で原寸（＝リサイズしない）。 */
+const DEFAULT_MAX_WIDTH = 0
 
 /** 立ち絵画像の入力方式（排他）。 */
 type ImageInputMode = 'upload' | 'url'
@@ -364,6 +364,33 @@ export default function PresetPanel({
                 <small>発話していない立ち絵を暗く・話す人を目立たせる</small>
               </span>
             </label>
+
+            <label className="toggle" htmlFor="pr-hide">
+              <input
+                id="pr-hide"
+                type="checkbox"
+                checked={editing.hideWhenInCall}
+                onChange={(e) => set('hideWhenInCall', e.target.checked)}
+              />
+              <span className="sw" />
+              <span className="lab">
+                通話中は立ち絵を隠す
+                <small>本人が通話に参加している間だけ非表示（通話にいない時だけ出す）</small>
+              </span>
+            </label>
+
+            <div style={{ marginTop: 14 }}>
+              <button
+                type="button"
+                className="sm ghost"
+                onClick={() => onChange(resetPresetOptions(editing))}
+              >
+                ↺ オプションを既定に戻す
+              </button>
+              <span className="hint" style={{ marginLeft: 8 }}>
+                位置・サイズ・演出などを初期値に戻します（名前・画像はそのまま）。
+              </span>
+            </div>
 
             <p className="hint" style={{ marginTop: 12 }}>
               常時表示・発話検知は CSS <code>:has()</code> を使います。古い OBS(CEF) では効かないことがあります。
