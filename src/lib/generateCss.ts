@@ -55,14 +55,16 @@ const KEYFRAMES_JUMP_BOTTOM = (jumpPx: number) => `@keyframes speak-jump {
   100% { bottom: 0px; }
 }`
 
-const KEYFRAMES_LIGHT = (color: string) => {
+const KEYFRAMES_LIGHT = (color: string, width: number) => {
   const c = safeColor(color)
+  // 幅 w のフチ＝4方向 ±w のオフセット影。グローは半径 w↔4w で脈動（既定 w=2 で従来の 2↔8）。
+  const w = width > 0 ? width : 1
   const shadows = (blur: number) =>
-    `drop-shadow(0 0 ${blur}px ${c}) drop-shadow(2px 2px 0px ${c}) drop-shadow(-2px -2px 0px ${c}) drop-shadow(-2px 2px 0px ${c}) drop-shadow(2px -2px 0px ${c})`
+    `drop-shadow(0 0 ${blur}px ${c}) drop-shadow(${w}px ${w}px 0px ${c}) drop-shadow(-${w}px -${w}px 0px ${c}) drop-shadow(-${w}px ${w}px 0px ${c}) drop-shadow(${w}px -${w}px 0px ${c})`
   return `@keyframes speak-light {
-  0% { filter: ${shadows(2)}; }
-  50% { filter: ${shadows(8)}; }
-  100% { filter: ${shadows(2)}; }
+  0% { filter: ${shadows(w)}; }
+  50% { filter: ${shadows(4 * w)}; }
+  100% { filter: ${shadows(w)}; }
 }`
 }
 
@@ -112,7 +114,7 @@ function keyframeBlocks(
         : KEYFRAMES_JUMP_BOTTOM(speak.jumpPx),
     )
   }
-  if (effects.includes('light')) blocks.push(KEYFRAMES_LIGHT(speak.outlineColor))
+  if (effects.includes('light')) blocks.push(KEYFRAMES_LIGHT(speak.outlineColor, speak.outlineWidth))
   if (effects.includes('blink')) blocks.push(KEYFRAMES_BLINK)
   return blocks
 }

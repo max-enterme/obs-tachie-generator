@@ -62,6 +62,38 @@ function loadImage(dataUrl: string): Promise<HTMLImageElement> {
 }
 
 /**
+ * data URI（または画像として読める URL）を `maxWidth` に収まるよう canvas で縮小して data URI を返す。
+ * リサイズ不要（未指定 / 既に収まっている）なら入力をそのまま返す。
+ * アップロード経路（{@link fileToDataUri}）と URL→dataURI 変換経路（imageSource）で共用する。
+ */
+export async function resizeDataUri(
+  dataUrl: string,
+  options: ResizeOptions = {},
+): Promise<string> {
+  const { maxWidth, mimeType = 'image/png', quality = 0.92 } = options
+  if (!maxWidth || maxWidth <= 0) {
+    return dataUrl
+  }
+
+  const img = await loadImage(dataUrl)
+  const target = computeResizeDimensions(
+    { width: img.naturalWidth, height: img.naturalHeight },
+    maxWidth,
+  )
+  if (target.width === img.naturalWidth && target.height === img.naturalHeight) {
+    return dataUrl
+  }
+
+  const canvas = document.createElement('canvas')
+  canvas.width = target.width
+  canvas.height = target.height
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return dataUrl
+  ctx.drawImage(img, 0, 0, target.width, target.height)
+  return canvas.toDataURL(mimeType, quality)
+}
+
+/**
  * File を data URI に変換する。`maxWidth` を指定すると、それを超える画像だけ canvas で縮小して埋め込む。
  * リサイズ不要（未指定 / 収まっている）ならファイルをそのまま base64 化して原本を保つ。
  */
@@ -70,26 +102,5 @@ export async function fileToDataUri(
   options: ResizeOptions = {},
 ): Promise<string> {
   const original = await readAsDataUrl(file)
-  const { maxWidth, mimeType = 'image/png', quality = 0.92 } = options
-
-  if (!maxWidth || maxWidth <= 0) {
-    return original
-  }
-
-  const img = await loadImage(original)
-  const target = computeResizeDimensions(
-    { width: img.naturalWidth, height: img.naturalHeight },
-    maxWidth,
-  )
-  if (target.width === img.naturalWidth && target.height === img.naturalHeight) {
-    return original
-  }
-
-  const canvas = document.createElement('canvas')
-  canvas.width = target.width
-  canvas.height = target.height
-  const ctx = canvas.getContext('2d')
-  if (!ctx) return original
-  ctx.drawImage(img, 0, 0, target.width, target.height)
-  return canvas.toDataURL(mimeType, quality)
+  return resizeDataUri(original, options)
 }

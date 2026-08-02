@@ -80,7 +80,7 @@ export default function PresetPanel({
     }
     setBusy(true)
     try {
-      const resolved = await resolveImageSource(value, mode)
+      const resolved = await resolveImageSource(value, mode, maxWidth > 0 ? maxWidth : undefined)
       onChange({ ...editing, imageUrl: resolved.imageUrl })
       setInfo(
         resolved.warning
@@ -98,6 +98,9 @@ export default function PresetPanel({
       <div className="panel preset-list-panel">
         <h2>プリセット一覧</h2>
         <div className="preset-list">
+          <button type="button" className="preset-add" onClick={onAdd}>
+            ＋ 新規プリセット
+          </button>
           {presets.map((p) => (
             <div key={p.id} className={`preset-item${p.id === editingId ? ' active' : ''}`}>
               <button type="button" className="preset-pick" onClick={() => onSelect(p.id)}>
@@ -115,9 +118,6 @@ export default function PresetPanel({
               </button>
             </div>
           ))}
-          <button type="button" className="preset-add" onClick={onAdd}>
-            ＋ 新規プリセット
-          </button>
         </div>
       </div>
 
@@ -166,27 +166,15 @@ export default function PresetPanel({
                 </div>
 
                 {imgMode === 'upload' ? (
-                  <>
-                    <div className="field">
-                      <label htmlFor="pr-file">アップロード（→ data URI 埋め込み）</label>
-                      <input
-                        id="pr-file"
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => onFile(e.target.files?.[0])}
-                      />
-                    </div>
-                    <div className="field">
-                      <label htmlFor="pr-maxw">埋め込み最大幅(px)・0 で原寸</label>
-                      <input
-                        id="pr-maxw"
-                        type="number"
-                        min={0}
-                        value={maxWidth}
-                        onChange={(e) => setMaxWidth(Number(e.target.value))}
-                      />
-                    </div>
-                  </>
+                  <div className="field">
+                    <label htmlFor="pr-file">アップロード（→ data URI 埋め込み）</label>
+                    <input
+                      id="pr-file"
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => onFile(e.target.files?.[0])}
+                    />
+                  </div>
                 ) : (
                   <>
                     <div className="field">
@@ -219,6 +207,22 @@ export default function PresetPanel({
                     </div>
                   </>
                 )}
+
+                <div className="field">
+                  <label htmlFor="pr-maxw">
+                    埋め込み最大幅(px)・0 で原寸
+                    <small style={{ display: 'block', color: 'var(--muted)' }}>
+                      ※埋め込み(dataURI)時に縮小／「URLのまま」は対象外
+                    </small>
+                  </label>
+                  <input
+                    id="pr-maxw"
+                    type="number"
+                    min={0}
+                    value={maxWidth}
+                    onChange={(e) => setMaxWidth(Number(e.target.value))}
+                  />
+                </div>
               </div>
             </div>
             {busy && <p className="hint">処理中…</p>}
@@ -232,7 +236,7 @@ export default function PresetPanel({
             <div className="subhead">位置とサイズ</div>
             <div className="row">
               <div className="field">
-                <label htmlFor="pr-left">位置 left(px)</label>
+                <label htmlFor="pr-left">左端からの距離(px)</label>
                 <input
                   id="pr-left"
                   type="number"
@@ -241,7 +245,7 @@ export default function PresetPanel({
                 />
               </div>
               <div className="field">
-                <label htmlFor="pr-bottom">位置 bottom(px)</label>
+                <label htmlFor="pr-bottom">下端からの距離(px)</label>
                 <input
                   id="pr-bottom"
                   type="number"
@@ -331,6 +335,17 @@ export default function PresetPanel({
                   value={editing.speak.outlineColor ?? '#FFFFFF'}
                   disabled={!editing.speak.outline}
                   onChange={(e) => setSpeak('outlineColor', e.target.value)}
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="pr-outw">枠・後光の幅(px)</label>
+                <input
+                  id="pr-outw"
+                  type="number"
+                  min={1}
+                  value={editing.speak.outlineWidth}
+                  disabled={!editing.speak.outline}
+                  onChange={(e) => setSpeak('outlineWidth', Number(e.target.value))}
                 />
               </div>
             </div>

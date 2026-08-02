@@ -6,6 +6,8 @@
  * Streamkit 側の更新で変わりうるため、判定できないものは data URI 化(またはアップロード)に倒す。
  */
 
+import { resizeDataUri } from './image'
+
 /** どうやって画像を CSS に載せるか。 */
 export type ImageSourceMode = 'auto' | 'url' | 'dataUri'
 
@@ -71,13 +73,17 @@ export interface ResolvedImageSource {
 
 /**
  * モードに従って入力 URL を解決する。
- * - `url`    : そのまま使う。
- * - `dataUri`: data URI 化(失敗したら URL のままにして警告)。
+ * - `url`    : そのまま使う（リモート URL は触れないので `maxWidth` リサイズは非対象）。
+ * - `dataUri`: data URI 化(失敗したら URL のままにして警告)。変換後、`maxWidth` があれば縮小して埋め込む。
  * - `auto`   : 許可ホストなら URL のまま、そうでなければ data URI 化を試み、失敗したら URL のまま＋警告。
+ *              data URI 化した場合のみ `maxWidth` リサイズを適用。
+ *
+ * `maxWidth`（px, 0/未指定でリサイズなし）は「URL→dataURI 変換して埋め込む」ときだけ効く。
  */
 export async function resolveImageSource(
   input: string,
   mode: ImageSourceMode = 'auto',
+  maxWidth?: number,
 ): Promise<ResolvedImageSource> {
   const url = input.trim()
 
@@ -99,7 +105,7 @@ export async function resolveImageSource(
 
   if (mode === 'dataUri') {
     try {
-      const dataUri = await urlToDataUri(url)
+      const dataUri = await resizeDataUri(await urlToDataUri(url), { maxWidth })
       return { imageUrl: dataUri, applied: 'dataUri', note: 'data URI に変換して埋め込み', warning: '' }
     } catch {
       return {
@@ -122,7 +128,7 @@ export async function resolveImageSource(
     }
   }
   try {
-    const dataUri = await urlToDataUri(url)
+    const dataUri = await resizeDataUri(await urlToDataUri(url), { maxWidth })
     return {
       imageUrl: dataUri,
       applied: 'dataUri',

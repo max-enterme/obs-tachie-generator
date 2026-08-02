@@ -61,6 +61,8 @@ export default function TachiePreview({
     width: `${widthPct}%`,
     ['--tp-jump' as string]: `${speak?.jumpPx ?? 0}px`,
     ['--tp-outline' as string]: speak?.outlineColor ?? '#FFFFFF',
+    // generateCss と同じく w<=0 は 1px に丸める（プレビューと出力を一致させる）
+    ['--tp-outline-w' as string]: `${Math.max(1, speak?.outlineWidth ?? 2)}px`,
     filter: dimmed ? 'brightness(0.5)' : undefined,
     animation: anims.length ? anims.join(', ') : undefined,
   }
@@ -83,7 +85,7 @@ export default function TachiePreview({
           />
           <span className="sw" />
           <span className="lab" style={{ fontSize: '0.84rem' }}>
-            発話プレビュー
+            {speaking ? '発話中' : '非発話中'}
           </span>
         </label>
       </div>

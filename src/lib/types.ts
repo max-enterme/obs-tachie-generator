@@ -24,6 +24,8 @@ export interface SpeakEffect {
   outline: boolean
   /** 枠・後光の色（CSS カラー。既定 `#FFFFFF`）。 */
   outlineColor: string
+  /** 枠・後光の幅(px)。drop-shadow のオフセット量とグロー半径の基準（既定 2）。 */
+  outlineWidth: number
   /** 点滅（opacity のパルス）を出すか。 */
   blink: boolean
   /** アニメーション周期(ms)。 */
@@ -163,6 +165,7 @@ export const DEFAULT_SPEAK: SpeakEffect = {
   jumpPx: 10,
   outline: true,
   outlineColor: '#FFFFFF',
+  outlineWidth: 2,
   blink: false,
   durationMs: 750,
 }

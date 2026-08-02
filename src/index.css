@@ -1,18 +1,21 @@
 :root {
-  --bg: #14161c;
-  --bg-2: #0f1116;
-  --panel: #1d212b;
-  --panel-2: #252b38;
-  --panel-3: #2c3342;
-  --line: #333a4a;
-  --line-2: #3f4759;
-  --text: #e7ebf3;
-  --muted: #9aa4ba;
-  --accent: #6d8bff;
-  --accent-ink: #0b0e16;
-  --danger: #ff6d7a;
-  --ok: #46d19e;
-  --warn: #ffcf6d;
+  /* Discord ダークUI 寄せ */
+  --bg: #1e1f22;
+  --bg-2: #1e1f22;
+  --panel: #2b2d31;
+  --panel-2: #313338;
+  --panel-3: #383a40;
+  --line: #3f4147;
+  --line-2: #4e5058;
+  --text: #dbdee1;
+  --muted: #949ba4;
+  --accent: #5865f2;
+  --accent-hover: #4752c4;
+  --accent-ink: #ffffff;
+  --danger: #f23f43;
+  --ok: #23a55a;
+  --warn: #f0b232;
+  --input-bg: #1e1f22;
   color-scheme: dark;
 }
 
@@ -24,7 +27,7 @@ body {
   margin: 0;
   font-family: system-ui, -apple-system, 'Segoe UI', 'Hiragino Kaku Gothic ProN',
     'Noto Sans JP', sans-serif;
-  background: radial-gradient(1100px 500px at 82% -12%, #1c2334 0%, transparent 60%), var(--bg);
+  background: var(--bg);
   color: var(--text);
   line-height: 1.6;
 }
@@ -53,7 +56,7 @@ body {
 code {
   font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
   font-size: 0.86em;
-  background: #0b0e16;
+  background: var(--input-bg);
   padding: 1px 5px;
   border-radius: 5px;
   color: #cdd6ee;
@@ -328,7 +331,7 @@ input[type='text'],
 input[type='number'],
 input[type='url'],
 select {
-  background: var(--panel-2);
+  background: var(--input-bg);
   border: 1px solid var(--line);
   border-radius: 8px;
   color: var(--text);
@@ -358,24 +361,31 @@ input[type='color'] {
 }
 
 button {
-  background: var(--panel-2);
+  background: var(--panel-3);
   color: var(--text);
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 8px 12px;
   font: inherit;
   cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
 }
 
 button:hover {
-  border-color: var(--accent);
+  border-color: var(--line-2);
+  background: var(--line);
 }
 
 button.primary {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--accent-ink);
-  font-weight: 700;
+  font-weight: 600;
+}
+
+button.primary:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
 }
 
 button.ghost {
@@ -564,7 +574,7 @@ button:disabled {
   height: 34px;
   flex: 0 0 auto;
   border-radius: 6px;
-  background: #0b0e16;
+  background: var(--input-bg);
   overflow: hidden;
   display: grid;
   place-items: center;
@@ -674,7 +684,7 @@ button:disabled {
   width: 48px;
   height: 48px;
   object-fit: contain;
-  background: #0b0e16;
+  background: var(--input-bg);
   border-radius: 6px;
   flex: 0 0 auto;
 }
@@ -770,7 +780,7 @@ button:disabled {
 textarea.css-out {
   width: 100%;
   min-height: 150px;
-  background: #0b0e16;
+  background: var(--input-bg);
   border: 1px solid var(--line);
   border-radius: 8px;
   color: #cdd6ee;
@@ -899,25 +909,25 @@ textarea.css-out {
 
 @keyframes tachie-preview-light {
   0% {
-    filter: drop-shadow(0 0 2px var(--tp-outline, #fff))
-      drop-shadow(2px 2px 0 var(--tp-outline, #fff))
-      drop-shadow(-2px -2px 0 var(--tp-outline, #fff))
-      drop-shadow(-2px 2px 0 var(--tp-outline, #fff))
-      drop-shadow(2px -2px 0 var(--tp-outline, #fff));
+    filter: drop-shadow(0 0 var(--tp-outline-w, 2px) var(--tp-outline, #fff))
+      drop-shadow(var(--tp-outline-w, 2px) var(--tp-outline-w, 2px) 0 var(--tp-outline, #fff))
+      drop-shadow(calc(-1 * var(--tp-outline-w, 2px)) calc(-1 * var(--tp-outline-w, 2px)) 0 var(--tp-outline, #fff))
+      drop-shadow(calc(-1 * var(--tp-outline-w, 2px)) var(--tp-outline-w, 2px) 0 var(--tp-outline, #fff))
+      drop-shadow(var(--tp-outline-w, 2px) calc(-1 * var(--tp-outline-w, 2px)) 0 var(--tp-outline, #fff));
   }
   50% {
-    filter: drop-shadow(0 0 8px var(--tp-outline, #fff))
-      drop-shadow(2px 2px 0 var(--tp-outline, #fff))
-      drop-shadow(-2px -2px 0 var(--tp-outline, #fff))
-      drop-shadow(-2px 2px 0 var(--tp-outline, #fff))
-      drop-shadow(2px -2px 0 var(--tp-outline, #fff));
+    filter: drop-shadow(0 0 calc(4 * var(--tp-outline-w, 2px)) var(--tp-outline, #fff))
+      drop-shadow(var(--tp-outline-w, 2px) var(--tp-outline-w, 2px) 0 var(--tp-outline, #fff))
+      drop-shadow(calc(-1 * var(--tp-outline-w, 2px)) calc(-1 * var(--tp-outline-w, 2px)) 0 var(--tp-outline, #fff))
+      drop-shadow(calc(-1 * var(--tp-outline-w, 2px)) var(--tp-outline-w, 2px) 0 var(--tp-outline, #fff))
+      drop-shadow(var(--tp-outline-w, 2px) calc(-1 * var(--tp-outline-w, 2px)) 0 var(--tp-outline, #fff));
   }
   100% {
-    filter: drop-shadow(0 0 2px var(--tp-outline, #fff))
-      drop-shadow(2px 2px 0 var(--tp-outline, #fff))
-      drop-shadow(-2px -2px 0 var(--tp-outline, #fff))
-      drop-shadow(-2px 2px 0 var(--tp-outline, #fff))
-      drop-shadow(2px -2px 0 var(--tp-outline, #fff));
+    filter: drop-shadow(0 0 var(--tp-outline-w, 2px) var(--tp-outline, #fff))
+      drop-shadow(var(--tp-outline-w, 2px) var(--tp-outline-w, 2px) 0 var(--tp-outline, #fff))
+      drop-shadow(calc(-1 * var(--tp-outline-w, 2px)) calc(-1 * var(--tp-outline-w, 2px)) 0 var(--tp-outline, #fff))
+      drop-shadow(calc(-1 * var(--tp-outline-w, 2px)) var(--tp-outline-w, 2px) 0 var(--tp-outline, #fff))
+      drop-shadow(var(--tp-outline-w, 2px) calc(-1 * var(--tp-outline-w, 2px)) 0 var(--tp-outline, #fff));
   }
 }
 

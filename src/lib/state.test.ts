@@ -59,6 +59,7 @@ describe('normalizeState', () => {
     expect(p.speak.jumpPx).toBe(5)
     expect(p.speak.outline).toBe(DEFAULT_SPEAK.outline)
     expect(p.speak.outlineColor).toBe(DEFAULT_SPEAK.outlineColor)
+    expect(p.speak.outlineWidth).toBe(DEFAULT_SPEAK.outlineWidth)
     expect(p.speak.durationMs).toBe(DEFAULT_SPEAK.durationMs)
   })
 

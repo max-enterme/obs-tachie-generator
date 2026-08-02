@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isDataUri, isStreamkitAllowedImageUrl } from './imageSource'
+import { isDataUri, isStreamkitAllowedImageUrl, resolveImageSource } from './imageSource'
 
 describe('isDataUri', () => {
   it('data URI を判定する', () => {
@@ -41,5 +41,25 @@ describe('isStreamkitAllowedImageUrl', () => {
   it('不正な URL は非許可', () => {
     expect(isStreamkitAllowedImageUrl('not a url')).toBe(false)
     expect(isStreamkitAllowedImageUrl('')).toBe(false)
+  })
+})
+
+describe('resolveImageSource（maxWidth は「URLのまま」には効かない）', () => {
+  it('url モードはリサイズ対象外・URL をそのまま返す', async () => {
+    const r = await resolveImageSource('https://cdn.discordapp.com/x.png', 'url', 100)
+    expect(r.applied).toBe('url')
+    expect(r.imageUrl).toBe('https://cdn.discordapp.com/x.png')
+  })
+
+  it('auto + 許可ホストは URL のまま（変換しない＝リサイズ対象外）', async () => {
+    const r = await resolveImageSource('https://i.imgur.com/x.png', 'auto', 100)
+    expect(r.applied).toBe('url')
+    expect(r.imageUrl).toBe('https://i.imgur.com/x.png')
+  })
+
+  it('入力が data URI ならそのまま（変換なし）', async () => {
+    const r = await resolveImageSource('data:image/png;base64,AAAA', 'auto', 100)
+    expect(r.applied).toBe('dataUri')
+    expect(r.imageUrl).toBe('data:image/png;base64,AAAA')
   })
 })
