@@ -29,7 +29,6 @@ export default function App() {
   const [pairings, setPairings] = useState<Pairing[]>(initial.pairings)
   const [selection, setSelection] = useState<Selection>(initial.selection)
   const [step, setStep] = useState(0)
-  const [speaking, setSpeaking] = useState(false)
   // ②で編集中のプリセット（下段プレビュー用）。未指定なら先頭にフォールバック。
   const [focusPresetId, setFocusPresetId] = useState<string | null>(null)
 
@@ -152,13 +151,7 @@ export default function App() {
               onRemove={removePreset}
               onChange={changePreset}
             />
-            <TachiePreview
-              preset={focusedPreset}
-              speaking={speaking}
-              onSpeakingChange={setSpeaking}
-              title="プレビュー"
-              toggleId="tp-speaking-preset"
-            />
+            <TachiePreview preset={focusedPreset} title="プレビュー" />
           </section>
         )}
 
@@ -187,13 +180,7 @@ export default function App() {
                 onRecall={recallPairing}
                 onRemove={removePairing}
               />
-              <TachiePreview
-                preset={selectedPreset}
-                speaking={speaking}
-                onSpeakingChange={setSpeaking}
-                title="プレビュー"
-                toggleId="tp-speaking-combine"
-              />
+              <TachiePreview preset={selectedPreset} title="プレビュー" />
             </div>
             <OutputPanel user={selectedUser} preset={selectedPreset} />
           </section>
