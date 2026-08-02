@@ -122,14 +122,14 @@ code {
   text-overflow: ellipsis;
 }
 
-.step-tab[aria-current='true'] {
-  border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
+.step-tab[aria-current='step'] {
+  border-color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 12%, var(--panel));
 }
 
-.step-tab[aria-current='true'] .n {
-  background: var(--accent);
-  color: var(--accent-ink);
+.step-tab[aria-current='step'] .n {
+  background: var(--warn);
+  color: #1e1f22;
 }
 
 .step-tab.done .n {
