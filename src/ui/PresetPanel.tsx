@@ -369,13 +369,13 @@ export default function PresetPanel({
               <input
                 id="pr-hide"
                 type="checkbox"
-                checked={editing.hideWhenInCall}
-                onChange={(e) => set('hideWhenInCall', e.target.checked)}
+                checked={editing.hideWhenAway}
+                onChange={(e) => set('hideWhenAway', e.target.checked)}
               />
               <span className="sw" />
               <span className="lab">
-                通話中は立ち絵を隠す
-                <small>本人が通話に参加している間だけ非表示（通話にいない時だけ出す）</small>
+                通話にいないときは立ち絵を隠す
+                <small>通話に参加している間だけ表示（＝常時表示をやめる。Streamkit 標準に近い）</small>
               </span>
             </label>
 

@@ -163,15 +163,20 @@ describe('generateStandaloneCss (常時表示 / body::after)', () => {
     expect(css).toMatch(/:has\([^)]*\)::after \{[^}]*filter: brightness\(100%\)/)
   })
 
-  it('通話中は隠す：hideWhenInCall で in-call 検知の隠しルールを出す', () => {
-    const on = generateStandaloneCss(USER_A, opts({ hideWhenInCall: true }))
+  it('通話にいないときは隠す：hideWhenAway で在室時だけ表示する', () => {
+    const on = generateStandaloneCss(USER_A, opts({ hideWhenAway: true }))
+    // body::after の既定は非表示
+    expect(on).toMatch(/body::after \{[^}]*display: none/)
+    // 在室（:has で img 検知）のときだけ表示に戻す
     expect(on).toMatch(
-      /body:has\(img\[src\*="avatars\/649228696229511179"\]\)::after \{\s*display: none/,
+      /body:has\(img\[src\*="avatars\/649228696229511179"\]\)::after \{\s*display: block/,
     )
-    const off = generateStandaloneCss(USER_A, opts({ hideWhenInCall: false }))
-    // in-call の隠しルール（Speaking を含まない :has）は出ない
+
+    const off = generateStandaloneCss(USER_A, opts({ hideWhenAway: false }))
+    // 既定は常時表示（block）で、在室検知の表示ルールは出さない
+    expect(off).toMatch(/body::after \{[^}]*display: block/)
     expect(off).not.toMatch(
-      /body:has\(img\[src\*="avatars\/[0-9]+"\]\)::after \{\s*display: none/,
+      /body:has\(img\[src\*="avatars\/[0-9]+"\]\)::after \{\s*display: block/,
     )
   })
 })
