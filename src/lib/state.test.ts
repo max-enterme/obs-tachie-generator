@@ -56,6 +56,7 @@ describe('normalizeState', () => {
     expect(p.bottom).toBe(DEFAULT_OPTIONS.bottom)
     expect(p.width).toBeUndefined()
     expect(p.dimWhenQuiet).toBe(DEFAULT_OPTIONS.dimWhenQuiet)
+    expect(p.hideWhenInCall).toBe(DEFAULT_OPTIONS.hideWhenInCall)
     expect(p.speak.jumpPx).toBe(5)
     expect(p.speak.outline).toBe(DEFAULT_SPEAK.outline)
     expect(p.speak.outlineColor).toBe(DEFAULT_SPEAK.outlineColor)

@@ -76,11 +76,16 @@ export default function TachiePreview({ preset, title = 'プレビュー' }: Pro
     paddingBottom: `${bottomPct}%`,
   }
 
-  const status = !inCall
-    ? '通話にいない（立ち絵は常時表示）'
-    : effectiveSpeaking
-      ? '通話中・発話中'
-      : '通話中・静か'
+  // 「通話中は立ち絵を隠す」設定 かつ 通話中 なら、立ち絵は非表示。
+  const hiddenNow = (preset?.hideWhenInCall ?? false) && inCall
+
+  const status = hiddenNow
+    ? '通話中（この設定では立ち絵は非表示）'
+    : !inCall
+      ? '通話にいない（立ち絵は常時表示）'
+      : effectiveSpeaking
+        ? '通話中・発話中'
+        : '通話中・静か'
 
   return (
     <div className="panel">
@@ -117,7 +122,7 @@ export default function TachiePreview({ preset, title = 'プレビュー' }: Pro
         }}
       >
         <span className="tp-status">{status}</span>
-        {preset && (
+        {preset && !hiddenNow && (
           <div className="tp-row" style={rowStyle}>
             {preset.imageUrl ? (
               <img

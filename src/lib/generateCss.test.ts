@@ -162,6 +162,18 @@ describe('generateStandaloneCss (常時表示 / body::after)', () => {
     )
     expect(css).toMatch(/:has\([^)]*\)::after \{[^}]*filter: brightness\(100%\)/)
   })
+
+  it('通話中は隠す：hideWhenInCall で in-call 検知の隠しルールを出す', () => {
+    const on = generateStandaloneCss(USER_A, opts({ hideWhenInCall: true }))
+    expect(on).toMatch(
+      /body:has\(img\[src\*="avatars\/649228696229511179"\]\)::after \{\s*display: none/,
+    )
+    const off = generateStandaloneCss(USER_A, opts({ hideWhenInCall: false }))
+    // in-call の隠しルール（Speaking を含まない :has）は出ない
+    expect(off).not.toMatch(
+      /body:has\(img\[src\*="avatars\/[0-9]+"\]\)::after \{\s*display: none/,
+    )
+  })
 })
 
 describe('generateCombinedCss (まとめ / per-img)', () => {

@@ -124,7 +124,7 @@ function keyframeBlocks(
  */
 export function generateStandaloneCss(user: TachieUser, options: GenerateOptions): string {
   const id = safeId(user.id)
-  const { left, bottom, width, dimWhenQuiet, speak } = options
+  const { left, bottom, width, dimWhenQuiet, hideWhenInCall, speak } = options
   const effects = activeEffects(speak)
 
   const afterDecls = [
@@ -160,6 +160,17 @@ export function generateStandaloneCss(user: TachieUser, options: GenerateOptions
       `/* 発話中：非表示の実 img に付く Voice_avatarSpeaking__ を :has() で検知して body::after を演出 */
 body:has(img[src*="avatars/${id}"][class*="Voice_avatarSpeaking__"])::after {
 ${speakingDecls.join('\n')}
+}`,
+    )
+  }
+
+  // 通話中は隠す：本人が接続中は実 img が DOM に出る（display:none でも :has() は一致）ので、
+  // それを検知して body::after を隠す。→ 通話にいない時だけ立ち絵が出る。
+  if (hideWhenInCall) {
+    parts.push(
+      `/* 通話中（本人が接続中）は立ち絵を隠す */
+body:has(img[src*="avatars/${id}"])::after {
+  display: none;
 }`,
     )
   }
