@@ -1,11 +1,40 @@
 import { describe, expect, it } from 'vitest'
-import { isDataUri, isStreamkitAllowedImageUrl, resolveImageSource } from './imageSource'
+import {
+  isDataUri,
+  isExpiringImageUrl,
+  isStreamkitAllowedImageUrl,
+  resolveImageSource,
+} from './imageSource'
 
 describe('isDataUri', () => {
   it('data URI を判定する', () => {
     expect(isDataUri('data:image/png;base64,AAAA')).toBe(true)
     expect(isDataUri('  data:image/png;base64,AAAA')).toBe(true)
     expect(isDataUri('https://ex.com/a.png')).toBe(false)
+  })
+})
+
+describe('isExpiringImageUrl', () => {
+  it('Discord の署名付き添付/メディアURLは失効扱い', () => {
+    expect(
+      isExpiringImageUrl(
+        'https://cdn.discordapp.com/attachments/1/2/a.png?ex=abc&is=def&hm=deadbeef',
+      ),
+    ).toBe(true)
+    expect(
+      isExpiringImageUrl('https://media.discordapp.net/attachments/1/2/a.png'),
+    ).toBe(true)
+  })
+
+  it('署名なしの Discord CDN（絵文字・アバター）は失効扱いにしない', () => {
+    expect(isExpiringImageUrl('https://cdn.discordapp.com/emojis/12345.png')).toBe(false)
+    expect(isExpiringImageUrl('https://cdn.discordapp.com/avatars/1/abc.png')).toBe(false)
+  })
+
+  it('imgur・その他ホスト・不正URLは失効扱いにしない', () => {
+    expect(isExpiringImageUrl('https://i.imgur.com/x.png')).toBe(false)
+    expect(isExpiringImageUrl('https://example.pages.dev/x.png')).toBe(false)
+    expect(isExpiringImageUrl('not a url')).toBe(false)
   })
 })
 

@@ -32,7 +32,7 @@ export default function PresetPanel({
 }: Props) {
   const editing = presets.find((p) => p.id === editingId) ?? null
 
-  const [imgMode, setImgMode] = useState<ImageInputMode>('upload')
+  const [imgMode, setImgMode] = useState<ImageInputMode>('url')
   const [urlInput, setUrlInput] = useState('')
   const [mode, setMode] = useState<ImageSourceMode>('auto')
   const [maxWidth, setMaxWidth] = useState(DEFAULT_MAX_WIDTH)
