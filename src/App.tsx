@@ -2,18 +2,24 @@ import { useEffect, useState } from 'react'
 import AppUserForm from './ui/AppUserForm'
 import AppUserList from './ui/AppUserList'
 import PresetPanel from './ui/PresetPanel'
-import PairingPanel from './ui/PairingPanel'
+import CombinePanel from './ui/CombinePanel'
 import OutputPanel from './ui/OutputPanel'
 import TachiePreview from './ui/TachiePreview'
 import Stepper, { type StepDef } from './ui/Stepper'
 import { loadState, saveState } from './lib/state'
-import { makeDefaultPreset, newId, type AppUser, type Pairing, type Preset } from './lib/types'
+import {
+  makeDefaultPreset,
+  newId,
+  type AppUser,
+  type Pairing,
+  type Preset,
+  type Selection,
+} from './lib/types'
 
 const STEPS: StepDef[] = [
   { key: 'ユーザー', desc: 'Discord ID・名前' },
   { key: '立ち絵・演出', desc: 'プリセットを用意' },
-  { key: '組み合わせ', desc: 'ペア＆プレビュー' },
-  { key: '出力', desc: 'ペアごとに CSS' },
+  { key: '組み合わせ & 出力', desc: '選んで CSS を出す' },
 ]
 
 export default function App() {
@@ -21,17 +27,29 @@ export default function App() {
   const [users, setUsers] = useState<AppUser[]>(initial.users)
   const [presets, setPresets] = useState<Preset[]>(initial.presets)
   const [pairings, setPairings] = useState<Pairing[]>(initial.pairings)
+  const [selection, setSelection] = useState<Selection>(initial.selection)
   const [step, setStep] = useState(0)
   const [speaking, setSpeaking] = useState(false)
-  // プレビューに映すプリセット（②の編集中 / ③で選択中）。未指定なら先頭にフォールバック。
+  // ②で編集中のプリセット（下段プレビュー用）。未指定なら先頭にフォールバック。
   const [focusPresetId, setFocusPresetId] = useState<string | null>(null)
 
   useEffect(() => {
-    saveState({ users, presets, pairings })
-  }, [users, presets, pairings])
+    saveState({ users, presets, pairings, selection })
+  }, [users, presets, pairings, selection])
 
-  const focusedPreset =
-    presets.find((p) => p.id === focusPresetId) ?? presets[0] ?? null
+  const focusedPreset = presets.find((p) => p.id === focusPresetId) ?? presets[0] ?? null
+
+  // 作業中選択の有効値（明示選択が無ければ先頭にフォールバック）。
+  const effUserId =
+    selection.userId && users.some((u) => u.id === selection.userId)
+      ? selection.userId
+      : users[0]?.id ?? null
+  const effPresetId =
+    selection.presetId && presets.some((p) => p.id === selection.presetId)
+      ? selection.presetId
+      : presets[0]?.id ?? null
+  const selectedUser = users.find((u) => u.id === effUserId) ?? null
+  const selectedPreset = presets.find((p) => p.id === effPresetId) ?? null
 
   // --- users ---
   function addUser(user: AppUser) {
@@ -40,6 +58,7 @@ export default function App() {
   function removeUser(id: string) {
     setUsers((prev) => prev.filter((u) => u.id !== id))
     setPairings((prev) => prev.filter((p) => p.userId !== id))
+    setSelection((s) => (s.userId === id ? { ...s, userId: null } : s))
   }
 
   // --- presets ---
@@ -55,17 +74,29 @@ export default function App() {
     setPresets((prev) => prev.filter((p) => p.id !== id))
     setPairings((prev) => prev.filter((p) => p.presetId !== id))
     setFocusPresetId((cur) => (cur === id ? null : cur))
+    setSelection((s) => (s.presetId === id ? { ...s, presetId: null } : s))
   }
 
-  // --- pairings ---
-  function addPairing(pair: Pairing) {
-    setPairings((prev) => [...prev, pair])
+  // --- selection & saved pairings ---
+  function selectUser(userId: string) {
+    setSelection((s) => ({ ...s, userId }))
+  }
+  function selectPreset(presetId: string) {
+    setSelection((s) => ({ ...s, presetId }))
+  }
+  function saveSelection() {
+    if (effUserId == null || effPresetId == null) return
+    setPairings((prev) =>
+      prev.some((p) => p.userId === effUserId && p.presetId === effPresetId)
+        ? prev
+        : [...prev, { userId: effUserId, presetId: effPresetId }],
+    )
+  }
+  function recallPairing(pair: Pairing) {
+    setSelection({ userId: pair.userId, presetId: pair.presetId })
   }
   function removePairing(index: number) {
     setPairings((prev) => prev.filter((_, i) => i !== index))
-  }
-  function changePairingUser(index: number, userId: string) {
-    setPairings((prev) => prev.map((p, i) => (i === index ? { ...p, userId } : p)))
   }
 
   function goto(next: number) {
@@ -77,132 +108,117 @@ export default function App() {
       <header>
         <h1>OBS 立ち絵ジェネレーター</h1>
         <p>
-          「誰（Discord ID）」と「見た目（立ち絵プリセット）」を別々に用意して、出力時に組み合わせます。
+          「誰（Discord ID）」と「見た目（立ち絵プリセット）」を別々に用意して、選んだ1組を出力します。
         </p>
       </header>
 
       <Stepper steps={STEPS} current={step} onJump={goto} />
 
-      <div className="work-grid">
-        <div className="step-col">
-          {step === 0 && (
-            <section className="step-panel">
-              <div className="step-head">
-                <span className="step-num">1</span>
-                <div>
-                  <h2>ユーザー登録</h2>
-                  <p className="lead">
-                    立ち絵を出したい人（Discord ユーザーID＋表示名メモ）を登録します。
-                    立ち絵画像はここでは持たせません（見た目はステップ②）。
-                  </p>
-                </div>
+      <div className="work">
+        {step === 0 && (
+          <section className="step-panel">
+            <div className="step-head">
+              <span className="step-num">1</span>
+              <div>
+                <h2>ユーザー登録</h2>
+                <p className="lead">
+                  立ち絵を出したい人（Discord ユーザーID＋表示名メモ）を登録します。
+                  立ち絵画像はここでは持たせません（見た目はステップ②）。
+                </p>
               </div>
-              <AppUserForm onAdd={addUser} />
-              <AppUserList users={users} onRemove={removeUser} />
-            </section>
-          )}
+            </div>
+            <AppUserForm onAdd={addUser} />
+            <AppUserList users={users} onRemove={removeUser} />
+          </section>
+        )}
 
-          {step === 1 && (
-            <section className="step-panel">
-              <div className="step-head">
-                <span className="step-num">2</span>
-                <div>
-                  <h2>立ち絵・演出（プリセット）</h2>
-                  <p className="lead">
-                    再利用する見た目を作ります。立ち絵画像＋位置/サイズ＋発話演出を1セットに。
-                    複数作って使い分けられます。変更は右のプレビューに即反映されます。
-                  </p>
-                </div>
+        {step === 1 && (
+          <section className="step-panel">
+            <div className="step-head">
+              <span className="step-num">2</span>
+              <div>
+                <h2>立ち絵・演出（プリセット）</h2>
+                <p className="lead">
+                  再利用する見た目を作ります。立ち絵画像（アップロード⇄URLの切替）＋位置/サイズ＋発話演出を
+                  1セットに。変更は下のプレビューに即反映されます。
+                </p>
               </div>
-              <PresetPanel
-                presets={presets}
-                editingId={focusedPreset?.id ?? null}
-                onSelect={setFocusPresetId}
-                onAdd={addPreset}
-                onRemove={removePreset}
-                onChange={changePreset}
-              />
-            </section>
-          )}
+            </div>
+            <PresetPanel
+              presets={presets}
+              editingId={focusedPreset?.id ?? null}
+              onSelect={setFocusPresetId}
+              onAdd={addPreset}
+              onRemove={removePreset}
+              onChange={changePreset}
+            />
+            <TachiePreview
+              preset={focusedPreset}
+              speaking={speaking}
+              onSpeakingChange={setSpeaking}
+              title="プレビュー"
+              toggleId="tp-speaking-preset"
+            />
+          </section>
+        )}
 
-          {step === 2 && (
-            <section className="step-panel">
-              <div className="step-head">
-                <span className="step-num">3</span>
-                <div>
-                  <h2>組み合わせ & プレビュー</h2>
-                  <p className="lead">
-                    ユーザーとプリセットを選んでペアを作ります。出力はペアごとに 1 ソース。
-                    貼る前にプレビューで確認できます。
-                  </p>
-                </div>
+        {step === 2 && (
+          <section className="step-panel">
+            <div className="step-head">
+              <span className="step-num">3</span>
+              <div>
+                <h2>組み合わせ & 出力</h2>
+                <p className="lead">
+                  ユーザーとプリセットを選ぶと、その1組の CSS が下に出ます。ユーザーを変えれば
+                  IDだけ差し替わり、見た目は据え置き。よく使う組は「保存」で貯めて呼び戻せます。
+                </p>
               </div>
-              <PairingPanel
+            </div>
+            <div className="combine-grid">
+              <CombinePanel
                 users={users}
                 presets={presets}
                 pairings={pairings}
-                onAdd={addPairing}
+                userId={effUserId}
+                presetId={effPresetId}
+                onSelectUser={selectUser}
+                onSelectPreset={selectPreset}
+                onSave={saveSelection}
+                onRecall={recallPairing}
                 onRemove={removePairing}
-                onChangeUser={changePairingUser}
-                onFocusPreset={setFocusPresetId}
               />
               <TachiePreview
-                preset={focusedPreset}
+                preset={selectedPreset}
                 speaking={speaking}
                 onSpeakingChange={setSpeaking}
-                title="プレビュー（確認用・大）"
-                toggleId="tp-speaking-full"
+                title="プレビュー"
+                toggleId="tp-speaking-combine"
               />
-            </section>
-          )}
+            </div>
+            <OutputPanel user={selectedUser} preset={selectedPreset} />
+          </section>
+        )}
 
-          {step === 3 && (
-            <section className="step-panel">
-              <div className="step-head">
-                <span className="step-num">4</span>
-                <div>
-                  <h2>CSS を出力して OBS に貼る</h2>
-                  <p className="lead">
-                    ペアごとの CSS をコピー / ダウンロードし、OBS のブラウザソース（1ペア=1ソース）の
-                    カスタムCSSに貼ります。
-                  </p>
-                </div>
-              </div>
-              <OutputPanel users={users} presets={presets} pairings={pairings} />
-            </section>
-          )}
-
-          <div className="stepnav">
-            <button
-              className="ghost"
-              onClick={() => goto(step - 1)}
-              style={{ visibility: step === 0 ? 'hidden' : 'visible' }}
-            >
-              ← 戻る
-            </button>
-            <div className="spacer" />
-            <span className="label">
-              ステップ {step + 1} / {STEPS.length}
-            </span>
-            <button
-              className="primary"
-              onClick={() => goto(step + 1)}
-              disabled={step === STEPS.length - 1}
-            >
-              次へ →
-            </button>
-          </div>
+        <div className="stepnav">
+          <button
+            className="ghost"
+            onClick={() => goto(step - 1)}
+            style={{ visibility: step === 0 ? 'hidden' : 'visible' }}
+          >
+            ← 戻る
+          </button>
+          <div className="spacer" />
+          <span className="label">
+            ステップ {step + 1} / {STEPS.length}
+          </span>
+          <button
+            className="primary"
+            onClick={() => goto(step + 1)}
+            disabled={step === STEPS.length - 1}
+          >
+            次へ →
+          </button>
         </div>
-
-        <aside className="preview-col">
-          <TachiePreview
-            preset={focusedPreset}
-            speaking={speaking}
-            onSpeakingChange={setSpeaking}
-            title="プレビュー"
-            toggleId="tp-speaking-sticky"
-          />
-        </aside>
       </div>
     </div>
   )
