@@ -14,7 +14,7 @@ Worker スクリプト（`main`）は持たず、[`wrangler.jsonc`](wrangler.jso
 | Build command | `npm run build` |
 | Deploy command | `npx wrangler deploy` |
 | Production branch | `main` |
-| Node version | `20`（[`.node-version`](.node-version) で固定。CI と揃える） |
+| Node version | `22`（[`.node-version`](.node-version) で固定。CI と揃える。wrangler 4.x が Node >= 22 必須） |
 
 出力ディレクトリの指定欄は無い（`wrangler.jsonc` の `assets.directory = ./dist` が正）。
 環境変数・シークレットは**不要**（このアプリはビルド時にもランタイムにも秘密を使わない）。
