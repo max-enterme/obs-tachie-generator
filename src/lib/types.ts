@@ -47,8 +47,8 @@ export interface GenerateOptions {
   width?: number
   /** 静かな人（発話していない立ち絵）を暗くして、話している人を目立たせる。 */
   dimWhenQuiet: boolean
-  /** 通話中（本人が接続中）は立ち絵を隠す。通話にいない時だけ出す“離席”表示に使う。 */
-  hideWhenInCall: boolean
+  /** 通話にいないときは立ち絵を隠す（在室＝本人が接続中のときだけ表示）。 */
+  hideWhenAway: boolean
   /** 発話演出。 */
   speak: SpeakEffect
 }
@@ -86,8 +86,8 @@ export interface Preset {
   width?: number
   /** 静かな人（発話していない立ち絵）を暗くする。 */
   dimWhenQuiet: boolean
-  /** 通話中（本人が接続中）は立ち絵を隠す。 */
-  hideWhenInCall: boolean
+  /** 通話にいないときは立ち絵を隠す（在室のときだけ表示）。 */
+  hideWhenAway: boolean
   /** 発話演出。 */
   speak: SpeakEffect
 }
@@ -130,7 +130,7 @@ export function presetToOptions(p: Preset): GenerateOptions {
     bottom: p.bottom,
     width: p.width,
     dimWhenQuiet: p.dimWhenQuiet,
-    hideWhenInCall: p.hideWhenInCall,
+    hideWhenAway: p.hideWhenAway,
     speak: p.speak,
   }
 }
@@ -150,7 +150,7 @@ export function makeDefaultPreset(id: string): Preset {
     bottom: DEFAULT_OPTIONS.bottom,
     width: DEFAULT_OPTIONS.width,
     dimWhenQuiet: DEFAULT_OPTIONS.dimWhenQuiet,
-    hideWhenInCall: DEFAULT_OPTIONS.hideWhenInCall,
+    hideWhenAway: DEFAULT_OPTIONS.hideWhenAway,
     speak: { ...DEFAULT_SPEAK },
   }
 }
@@ -188,6 +188,6 @@ export const DEFAULT_OPTIONS: GenerateOptions = {
   bottom: 16,
   width: undefined,
   dimWhenQuiet: false,
-  hideWhenInCall: false,
+  hideWhenAway: false,
   speak: DEFAULT_SPEAK,
 }

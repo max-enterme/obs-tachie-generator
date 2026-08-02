@@ -76,11 +76,11 @@ export default function TachiePreview({ preset, title = 'プレビュー' }: Pro
     paddingBottom: `${bottomPct}%`,
   }
 
-  // 「通話中は立ち絵を隠す」設定 かつ 通話中 なら、立ち絵は非表示。
-  const hiddenNow = (preset?.hideWhenInCall ?? false) && inCall
+  // 「通話にいないときは立ち絵を隠す」設定 かつ 通話にいない なら、立ち絵は非表示。
+  const hiddenNow = (preset?.hideWhenAway ?? false) && !inCall
 
   const status = hiddenNow
-    ? '通話中（この設定では立ち絵は非表示）'
+    ? '通話にいない（この設定では立ち絵は非表示）'
     : !inCall
       ? '通話にいない（立ち絵は常時表示）'
       : effectiveSpeaking

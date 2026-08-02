@@ -124,7 +124,7 @@ function keyframeBlocks(
  */
 export function generateStandaloneCss(user: TachieUser, options: GenerateOptions): string {
   const id = safeId(user.id)
-  const { left, bottom, width, dimWhenQuiet, hideWhenInCall, speak } = options
+  const { left, bottom, width, dimWhenQuiet, hideWhenAway, speak } = options
   const effects = activeEffects(speak)
 
   const afterDecls = [
@@ -132,7 +132,8 @@ export function generateStandaloneCss(user: TachieUser, options: GenerateOptions
     `  position: fixed;`,
     `  left: ${left}px;`,
     `  bottom: ${bottom}px;`,
-    `  display: block;`,
+    // 通話にいないときは隠す設定なら、既定は非表示（在室時だけ下のルールで出す）。
+    `  display: ${hideWhenAway ? 'none' : 'block'};`,
     ...(width != null ? [`  width: ${width}px;`] : []),
     // 静かな人を暗くする：非発話時の既定を暗く
     ...(dimWhenQuiet ? [`  filter: brightness(${DIM_BRIGHTNESS_PCT}%);`] : []),
@@ -164,13 +165,13 @@ ${speakingDecls.join('\n')}
     )
   }
 
-  // 通話中は隠す：本人が接続中は実 img が DOM に出る（display:none でも :has() は一致）ので、
-  // それを検知して body::after を隠す。→ 通話にいない時だけ立ち絵が出る。
-  if (hideWhenInCall) {
+  // 通話にいないときは隠す：本人が接続中は実 img が DOM に出る（display:none でも :has() は一致）。
+  // それを検知して、在室（通話中）のときだけ立ち絵を表示する。→ 通話にいない時は非表示。
+  if (hideWhenAway) {
     parts.push(
-      `/* 通話中（本人が接続中）は立ち絵を隠す */
+      `/* 通話にいないときは隠す：在室（本人が接続中）のときだけ立ち絵を表示 */
 body:has(img[src*="avatars/${id}"])::after {
-  display: none;
+  display: block;
 }`,
     )
   }
