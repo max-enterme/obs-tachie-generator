@@ -66,12 +66,21 @@ npm run build      # 型チェック + 本番ビルド（dist/）
 ```
 
 コアは純粋関数 `generateCss(users, options)`（[`src/lib/generateCss.ts`](src/lib/generateCss.ts)）に集約し、
-Streamkit 互換フォーマットの正しさを vitest で固定しています。ホスティングは Cloudflare Pages を想定。
+Streamkit 互換フォーマットの正しさを vitest で固定しています。
+
+## デプロイ
+
+**Cloudflare Pages の Git 連携**（build: `npm run build` / output: `dist` / Node 20）。
+純粋な静的SPAで**秘密情報を使わない**ため、リポジトリにトークン等は不要です。手順は [`DEPLOY.md`](DEPLOY.md) 参照。
 
 ## クレジット
 
 alfe氏（@alfe_below）の「OBSのDiscord通話相手立ち絵表示ジェネレーター」に **着想を得た独自実装**です。
 alfe氏のコード・アセットは使用していません（inspired-by）。
+
+## ライセンス
+
+[MIT](LICENSE)。フォークして自分の Cloudflare 等にデプロイして使えます（[`DEPLOY.md`](DEPLOY.md)）。
 
 ## 状態
 
