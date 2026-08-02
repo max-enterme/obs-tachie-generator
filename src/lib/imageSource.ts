@@ -44,6 +44,28 @@ export function isStreamkitAllowedImageUrl(url: string): boolean {
   )
 }
 
+/**
+ * その URL が「時間で失効する」種類か（＝そのまま使うと後で表示されなくなる）。
+ * Discord の添付/メディア CDN は 2023 以降 署名付きURL（`?ex=&is=&hm=`）で約24時間で失効する。
+ * 立ち絵に貼りがちな `cdn.discordapp.com/attachments/...` `media.discordapp.net/...` を検知する。
+ * （絵文字・アバター等の署名なし URL は失効しないので対象外。）
+ */
+export function isExpiringImageUrl(url: string): boolean {
+  const u = url.trim()
+  let parsed: URL
+  try {
+    parsed = new URL(u)
+  } catch {
+    return false
+  }
+  const host = parsed.hostname.toLowerCase()
+  const isDiscordCdn = host.endsWith('discordapp.com') || host.endsWith('discordapp.net')
+  if (!isDiscordCdn) return false
+  const hasSignature = parsed.searchParams.has('hm') || parsed.searchParams.has('ex')
+  const isAttachment = /\/(ephemeral-)?attachments\//.test(parsed.pathname)
+  return hasSignature || isAttachment
+}
+
 /** 外部 URL を取得して data URI に変換する。CORS 非対応ホストでは失敗しうる。 */
 export async function urlToDataUri(url: string): Promise<string> {
   const res = await fetch(url, { mode: 'cors' })
@@ -92,15 +114,14 @@ export async function resolveImageSource(
   }
 
   if (mode === 'url') {
-    const allowed = isStreamkitAllowedImageUrl(url)
-    return {
-      imageUrl: url,
-      applied: 'url',
-      note: 'URL のまま使用',
-      warning: allowed
-        ? ''
-        : 'このホストは Streamkit の CSP で弾かれる可能性があります（表示されないかも）。',
+    let warning = ''
+    if (isExpiringImageUrl(url)) {
+      warning =
+        'Discord のリンクは約24時間で失効します。恒久運用は「data URI に変換」かアップロードを推奨。'
+    } else if (!isStreamkitAllowedImageUrl(url)) {
+      warning = 'このホストは Streamkit の CSP で弾かれる可能性があります（表示されないかも）。'
     }
+    return { imageUrl: url, applied: 'url', note: 'URL のまま使用', warning }
   }
 
   if (mode === 'dataUri') {
@@ -119,7 +140,9 @@ export async function resolveImageSource(
   }
 
   // auto
-  if (isStreamkitAllowedImageUrl(url)) {
+  const expiring = isExpiringImageUrl(url)
+  // 許可ホスト かつ 失効しない（imgur 等）→ URL のまま。Discord 添付は失効するので下で埋め込む。
+  if (isStreamkitAllowedImageUrl(url) && !expiring) {
     return {
       imageUrl: url,
       applied: 'url',
@@ -132,7 +155,9 @@ export async function resolveImageSource(
     return {
       imageUrl: dataUri,
       applied: 'dataUri',
-      note: '非許可ホストのため data URI に変換して埋め込み',
+      note: expiring
+        ? 'Discord のリンクは失効するため data URI に変換して埋め込み'
+        : '非許可ホストのため data URI に変換して埋め込み',
       warning: '',
     }
   } catch {
@@ -140,8 +165,9 @@ export async function resolveImageSource(
       imageUrl: url,
       applied: 'url',
       note: 'URL のまま使用',
-      warning:
-        '非許可ホストですが data URI 変換に失敗しました（CORS 等）。ダウンロードしてアップロード推奨。',
+      warning: expiring
+        ? 'Discord のリンクは約24時間で失効しますが、変換にも失敗しました。ダウンロードしてアップロードしてください。'
+        : '非許可ホストですが data URI 変換に失敗しました（CORS 等）。ダウンロードしてアップロード推奨。',
     }
   }
 }
