@@ -11,6 +11,6 @@ feature: css-generator-core
 - [x] T2: `generateCss` コア実装 — users+options → Streamkit互換CSS(data URI埋め込み・常時表示 `body::after`・発話 `:has()`・位置/サイズ)+ vitest  <!-- #3 -->
 - [x] T3: 画像取り込み `image.ts`(File → data URI・任意リサイズ)  <!-- #4 -->
 - [x] T4: UI 実装(ユーザー登録 / オプション / 出力パネル: コピー・per-person DL・まとめDL)  <!-- #5 -->
-- [ ] T5: UI 挙動・レイアウトのモック確定(`/idea-board`)→ 実装反映 ※人手・確認(§08/§10)  <!-- #6 -->
+- [x] T5: UI 挙動・レイアウトのモック確定 → 実装反映(2案モックHTML＋会話で確定し spec/plan に反映・実装済み。/idea-board は未使用)  <!-- #6 -->
 - [ ] T6: Cloudflare Pages デプロイ設定 + 公開 ※実機確認(§08)  <!-- #7 -->
 - [x] T7: README(使い方・alfe氏 inspired-by クレジット・`:has()`/OBS注意)  <!-- #8 -->
