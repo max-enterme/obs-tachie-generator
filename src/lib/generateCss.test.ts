@@ -119,6 +119,23 @@ describe('generateStandaloneCss (常時表示 / body::after)', () => {
     expect(blinkOnly).not.toContain('@keyframes speak-light')
   })
 
+  it('枠・後光の幅(outlineWidth)を反映する（既定2は従来通り、変更で blur/オフセット連動）', () => {
+    // 既定 width=2 → blur 2↔8, オフセット ±2（従来相当）
+    const w2 = generateStandaloneCss(USER_A, opts({ speak: { outlineColor: '#ff0000' } }))
+    expect(w2).toContain('drop-shadow(0 0 2px #ff0000)')
+    expect(w2).toContain('drop-shadow(2px 2px 0px #ff0000)')
+    expect(w2).toContain('drop-shadow(0 0 8px #ff0000)')
+    // width=4 → blur 4↔16, オフセット ±4
+    const w4 = generateStandaloneCss(
+      USER_A,
+      opts({ speak: { outlineColor: '#ff0000', outlineWidth: 4 } }),
+    )
+    expect(w4).toContain('drop-shadow(0 0 4px #ff0000)')
+    expect(w4).toContain('drop-shadow(4px 4px 0px #ff0000)')
+    expect(w4).toContain('drop-shadow(-4px -4px 0px #ff0000)')
+    expect(w4).toContain('drop-shadow(0 0 16px #ff0000)')
+  })
+
   it('枠・後光の色を反映し、不正な色は白に倒す', () => {
     const red = generateStandaloneCss(USER_A, opts({ speak: { outlineColor: '#ff0000' } }))
     expect(red).toContain('drop-shadow(0 0 2px #ff0000)')

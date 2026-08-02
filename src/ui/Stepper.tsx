@@ -24,7 +24,7 @@ export default function Stepper({ steps, current, onJump }: Props) {
           aria-current={i === current ? 'step' : undefined}
           onClick={() => onJump(i)}
         >
-          <span className="n">{i < current ? '✓' : i + 1}</span>
+          <span className="n">{i + 1}</span>
           <span className="t">
             <span className="k">{s.key}</span>
             <span className="d">{s.desc}</span>
