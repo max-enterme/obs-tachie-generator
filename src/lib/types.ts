@@ -86,7 +86,7 @@ export interface Preset {
   speak: SpeakEffect
 }
 
-/** 出力する「ユーザー × プリセット」の明示ペア（多対多）。 */
+/** 出力する「ユーザー × プリセット」の明示ペア（多対多）。保存リストの1件。 */
 export interface Pairing {
   /** {@link AppUser.id} 参照。 */
   userId: string
@@ -94,11 +94,26 @@ export interface Pairing {
   presetId: string
 }
 
-/** UI 全体の永続化対象。ユーザー・プリセット・ペアを独立に持つ。 */
+/**
+ * 「作業中の選択」1組。出力CSSはこの選択1組を対象にする。
+ * `pairings`（保存リスト）とは別で、保存はこの選択を貯める・呼び戻すためのもの。
+ */
+export interface Selection {
+  /** {@link AppUser.id} 参照。未選択なら null。 */
+  userId: string | null
+  /** {@link Preset.id} 参照。未選択なら null。 */
+  presetId: string | null
+}
+
+/** 未選択の作業中選択。 */
+export const EMPTY_SELECTION: Selection = { userId: null, presetId: null }
+
+/** UI 全体の永続化対象。ユーザー・プリセット・保存ペア・作業中選択を独立に持つ。 */
 export interface AppState {
   users: AppUser[]
   presets: Preset[]
   pairings: Pairing[]
+  selection: Selection
 }
 
 /** プリセットを generateCss の {@link GenerateOptions} に落とす（常に個別＝常時表示）。 */

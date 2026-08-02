@@ -3,11 +3,13 @@ import { normalizeState } from './state'
 import { cssFilename } from './download'
 import { DEFAULT_OPTIONS, DEFAULT_SPEAK } from './types'
 
+const EMPTY = { users: [], presets: [], pairings: [], selection: { userId: null, presetId: null } }
+
 describe('normalizeState', () => {
   it('空入力は空 state', () => {
-    expect(normalizeState(null)).toEqual({ users: [], presets: [], pairings: [] })
-    expect(normalizeState(undefined)).toEqual({ users: [], presets: [], pairings: [] })
-    expect(normalizeState('nope')).toEqual({ users: [], presets: [], pairings: [] })
+    expect(normalizeState(null)).toEqual(EMPTY)
+    expect(normalizeState(undefined)).toEqual(EMPTY)
+    expect(normalizeState('nope')).toEqual(EMPTY)
   })
 
   it('旧形（options を持ち presets が無い）は破棄して空 state', () => {
@@ -15,7 +17,7 @@ describe('normalizeState', () => {
       users: [{ id: '1', name: 'a', imageUrl: 'data:...' }],
       options: { left: 100 },
     }
-    expect(normalizeState(old)).toEqual({ users: [], presets: [], pairings: [] })
+    expect(normalizeState(old)).toEqual(EMPTY)
   })
 
   it('新形を検証して採用する', () => {
@@ -23,11 +25,13 @@ describe('normalizeState', () => {
       users: [{ id: '1', name: 'ユーザーA' }],
       presets: [{ id: 'p1', name: 'プリセットA', imageUrl: 'data:x', left: 10, bottom: 20 }],
       pairings: [{ userId: '1', presetId: 'p1' }],
+      selection: { userId: '1', presetId: 'p1' },
     })
     expect(s.users).toEqual([{ id: '1', name: 'ユーザーA' }])
     expect(s.presets).toHaveLength(1)
     expect(s.presets[0].id).toBe('p1')
     expect(s.pairings).toEqual([{ userId: '1', presetId: 'p1' }])
+    expect(s.selection).toEqual({ userId: '1', presetId: 'p1' })
   })
 
   it('不正なユーザー / プリセットを弾く', () => {
@@ -82,6 +86,23 @@ describe('normalizeState', () => {
       ],
     })
     expect(s.pairings).toEqual([{ userId: '1', presetId: 'p1' }])
+  })
+
+  it('selection の有効参照は保持、dangling は null に落とす', () => {
+    const base = {
+      users: [{ id: '1', name: 'a' }],
+      presets: [{ id: 'p1', name: 'A' }],
+    }
+    expect(
+      normalizeState({ ...base, selection: { userId: '1', presetId: 'p1' } }).selection,
+    ).toEqual({ userId: '1', presetId: 'p1' })
+    expect(
+      normalizeState({ ...base, selection: { userId: '9', presetId: 'p1' } }).selection,
+    ).toEqual({ userId: null, presetId: 'p1' })
+    expect(
+      normalizeState({ ...base, selection: { userId: '1', presetId: 'pX' } }).selection,
+    ).toEqual({ userId: '1', presetId: null })
+    expect(normalizeState(base).selection).toEqual({ userId: null, presetId: null })
   })
 })
 

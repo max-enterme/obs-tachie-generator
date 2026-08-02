@@ -134,19 +134,76 @@ code {
   color: var(--accent-ink);
 }
 
-/* ===== Layout: step content + sticky preview ===== */
-.work-grid {
+/* ===== Layout: per-step ===== */
+.work {
+  min-width: 0;
+}
+
+/* ② 立ち絵・演出：上段2ブロック（左=一覧 / 右=編集）＋下段プレビュー（全幅） */
+.preset-top {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 420px;
-  gap: 20px;
+  grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
+  gap: 16px;
+  margin-bottom: 16px;
   align-items: start;
 }
 
-.preview-col {
-  position: sticky;
-  top: 18px;
-  max-height: calc(100vh - 36px);
-  overflow: auto;
+/* ③ 組み合わせ & 出力：上段（組み合わせ / プレビュー）＋下段 出力（全幅） */
+.combine-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 420px);
+  gap: 16px;
+  margin-bottom: 16px;
+  align-items: start;
+}
+
+/* 排他セグメント（アップロード ⇄ 画像URL） */
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.seg button {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 6px 14px;
+  font-size: 0.84rem;
+}
+
+.seg button[aria-pressed='true'] {
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 700;
+}
+
+.pair-recall {
+  flex: 1 1 auto;
+  text-align: left;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: inherit;
+  border-radius: 8px;
+  padding: 7px 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pair-item.active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel-2));
+}
+
+@media (max-width: 860px) {
+  .preset-top,
+  .combine-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .step-panel {
@@ -878,13 +935,6 @@ textarea.css-out {
 
 /* ===== Responsive ===== */
 @media (max-width: 900px) {
-  .work-grid {
-    grid-template-columns: 1fr;
-  }
-  .preview-col {
-    position: static;
-    order: -1;
-  }
   .stepper {
     flex-wrap: wrap;
   }
@@ -893,8 +943,5 @@ textarea.css-out {
   }
   .step-tab .t .d {
     display: none;
-  }
-  .modecards {
-    grid-template-columns: 1fr;
   }
 }
