@@ -3,7 +3,7 @@ feature: position-anchor
 test: npm run typecheck && npm run lint && npx vitest run
 ---
 
-# 実装計画 — 立ち絵の基準位置(アンカー)を9通りから選ぶ
+# 実装計画 — 立ち絵の基準位置(アンカー)を9通りから選ぶ ＋ 画像クロップ
 
 > plan.md — 「どう作るか」。spec.md の受け入れ条件を満たす設計。
 
@@ -25,14 +25,36 @@ test: npm run typecheck && npm run lint && npx vitest run
   「中央寄せ分の translate」を返す小さな純粋関数を作り、`body::after` の静止時 `transform` と
   `@keyframes speak-jump` の**両方が同じ関数の結果を前置**する形にする(spec の案1)。
 
+### クロップ
+- **CSS には一切出さない。** 取り込み済み画像を canvas で切り抜き、結果の data URI で `Preset.imageUrl` を
+  上書きする(破壊的)。`generateCss` / 出力フォーマットは**無改修**。
+- **判断のいる部分を純粋関数に寄せて vitest 対象にする**(canvas は DOM 依存で単体テストしにくいため、
+  既存の `image.ts` が `computeResizeDimensions` を切り出しているのと同じ方針):
+
+  | 関数 | 責務 | 純粋か |
+  |---|---|---|
+  | `normalizeCropRect(rect, dims)` | 画像内へクランプ・整数化・最小 1px 保証・空矩形の拒否 | 純粋 |
+  | `computeTrimBounds(pixels, dims, alphaThreshold)` | アルファがしきい値以下の外周を落とす矩形を返す | 純粋(`Uint8ClampedArray` を受ける) |
+  | `cropDataUri(dataUrl, rect)` | 実際の切り抜き(canvas)。内部で `normalizeCropRect` を通す | DOM 依存 |
+  | `detectTrimRect(dataUrl, threshold)` | 画像を読んで `getImageData` → `computeTrimBounds` | DOM 依存 |
+
+- `computeTrimBounds` は「全面不透明 → 原寸のまま」「全面透明 → **トリムしない**(全消しを避けて安全側に倒す)」を
+  明示的に返す。しきい値は既定 `alpha <= 0`(完全透明のみ)。
+- 出力は **PNG 固定**(透過保持)。切り抜き後の再リサイズはしない。
+- UI は PresetPanel の画像ブロックに置く。「余白を詰める」ボタン(自動)と「範囲を指定して切り抜き」
+  (プレビュー上のドラッグ + `x`/`y`/`幅`/`高さ` の数値入力)の2経路。適用は確認を挟み、
+  **元に戻せない**旨をその場に出す。
+
 ## 主要コンポーネント / 変更点
 | 層 | 変更 |
 |---|---|
 | `src/lib/types.ts` | `GenerateOptions` / `Preset` に `anchorX` / `anchorY`(任意)。`DEFAULT_OPTIONS` は `left`/`bottom`。`presetToOptions` で受け渡し |
 | `src/lib/generateCss.ts` | 位置宣言の生成を関数に切り出し(`positionDecls(options)`)。`KEYFRAMES_JUMP_TRANSFORM` を「中央寄せ translate を前置する」形に変更。`generateCombinedCss` は型の整合のみ(挙動は据え置き) |
 | `src/lib/state.ts` | 保存済み `Preset` 読み込み時に `anchorX`/`anchorY` 欠損を既定値で補完(マイグレーション) |
-| `src/ui/PresetPanel.tsx` | 「位置とサイズ」に 3×3 のアンカー選択を追加。オフセットのラベルをアンカーに追従(「左端からの距離」⇄「右端からの距離」) |
-| `src/ui/TachiePreview.tsx` | プレビューの配置をアンカーに追従 |
+| `src/ui/PresetPanel.tsx` | 「位置とサイズ」に 3×3 のアンカー選択を追加。オフセットのラベルをアンカーに追従(「左端からの距離」⇄「右端からの距離」)。画像ブロックにクロップUI(余白を詰める / 範囲指定)とクロップ後寸法の表示 |
+| `src/ui/TachiePreview.tsx` | プレビューの配置をアンカーに追従。クロップは `imageUrl` が差し替わるだけなので**追加対応なし** |
+| `src/lib/crop.ts`(新規) | `normalizeCropRect` / `computeTrimBounds`(純粋)+ `cropDataUri` / `detectTrimRect`(canvas) |
+| `src/lib/crop.test.ts`(新規) | 矩形の正規化と余白検出の境界ケース(はみ出し・負値・幅0・小数・全面不透明・全面透明・片側のみ余白) |
 | `src/lib/generateCss.test.ts` | 9通り × 発話演出のスナップショット的アサーション。既存(左下)の出力が**変わらない**ことを固定 |
 
 ## 依存 / 前提
@@ -48,3 +70,13 @@ test: npm run typecheck && npm run lint && npx vitest run
 - **既存出力のバイト一致**。左下アンカー時に空白や宣言順が変わると回帰テストが落ちる。
   位置宣言の生成を切り出すときに順序を保つこと。
 - 縦中央(`middle`)は Streamkit の実運用でほぼ使われない見込み。**UI に出すが動作確認は薄くなる**可能性がある。
+- **クロップは元に戻せない**(破壊的・spec の「降りる箇所」)。UI で警告を出しても事故は起きうる。
+  最低限、**適用前に確認ダイアログ**を挟むこと。非破壊にする設計変更は別 feature。
+- **切り抜きで CSS が肥大しないか。** クロップは基本的に画素を減らすので data URI は小さくなるが、
+  **元が JPEG/WebP でも出力は PNG 固定**のため、写真的な画像では逆に膨らむことがある。
+  クロップ後のサイズを UI に出して気づけるようにする(既存の埋め込みサイズ表示に乗せる)。
+- **`getImageData` の CORS 汚染。** 外部URL取り込み(`imageSource`)を data URI 化せずに読むと canvas が汚染され
+  `getImageData` が例外になる。クロップは**data URI 化済みの画像にだけ**掛ける(現行の取り込み経路はそうなっている)。
+  例外は握り潰さず「この画像はクロップできません」と出す。
+- `crop.ts` は 002 / アンカー本体と**ファイルが重ならない**(新規 + `PresetPanel.tsx` のみ)。
+  アンカー側のタスクと**並行して進められる**。
