@@ -3,7 +3,7 @@ feature: css-generator-core
 issue: 1
 release: r1
 priority: must
-status: レビュー
+status: 完了
 ---
 
 # Streamkit 互換 立ち絵CSSジェネレーター(コア)

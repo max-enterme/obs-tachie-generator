@@ -1,6 +1,5 @@
 ---
 feature: css-generator-core
-status: 未着手
 test: npm run typecheck && npm run lint && npx vitest run
 ---
 

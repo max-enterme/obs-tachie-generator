@@ -3,6 +3,8 @@
 OBS で Discord の通話相手を「立ち絵」で表示するための **Discord Streamkit 用カスタムCSS** を、
 ブラウザ上で生成する静的Webツール。
 
+**▶ https://obs-tachie-generator.max-enterme.workers.dev/** （インストール不要・ブラウザだけで使えます）
+
 ## 特徴（既存ツールとの差分）
 
 - **画像を data URI で埋め込み** — 外部ホスト不要・Streamkit の CSP 回避・URL 失効なし。
@@ -70,8 +72,11 @@ Streamkit 互換フォーマットの正しさを vitest で固定していま�
 
 ## デプロイ
 
-**Cloudflare Pages の Git 連携**（build: `npm run build` / output: `dist` / Node 20）。
-純粋な静的SPAで**秘密情報を使わない**ため、リポジトリにトークン等は不要です。手順は [`DEPLOY.md`](DEPLOY.md) 参照。
+公開先: **https://obs-tachie-generator.max-enterme.workers.dev/**
+
+**Cloudflare Workers（Static Assets）の Git 連携**（build: `npm run build` / deploy: `npx wrangler deploy` / Node 22）。
+`main` に push すると自動でビルド・デプロイされます。純粋な静的SPAで**秘密情報を使わない**ため、
+リポジトリにトークン等は不要です。手順は [`DEPLOY.md`](DEPLOY.md) 参照。
 
 ## クレジット
 
