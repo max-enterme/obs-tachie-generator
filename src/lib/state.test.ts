@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { normalizeState } from './state'
 import { cssFilename } from './download'
-import { DEFAULT_OPTIONS, DEFAULT_SPEAK } from './types'
+import { DEFAULT_NAME_LABEL, DEFAULT_OPTIONS, DEFAULT_SPEAK } from './types'
 
 const EMPTY = { users: [], presets: [], pairings: [], selection: { userId: null, presetId: null } }
 
@@ -62,6 +62,80 @@ describe('normalizeState', () => {
     expect(p.speak.outlineColor).toBe(DEFAULT_SPEAK.outlineColor)
     expect(p.speak.outlineWidth).toBe(DEFAULT_SPEAK.outlineWidth)
     expect(p.speak.durationMs).toBe(DEFAULT_SPEAK.durationMs)
+  })
+
+  it('ユーザーの displayName を保持し、型不一致は displayName だけ捨てる', () => {
+    const s = normalizeState({
+      users: [
+        { id: '1', name: 'メモ名', displayName: '画面名A' },
+        { id: '2', name: 'ok' },
+        { id: '3', name: '型違い', displayName: 42 },
+      ],
+      presets: [],
+    })
+    // 任意フィールドの型不一致でユーザーごと落とさない（プリセット側の方針に揃える）
+    expect(s.users).toEqual([
+      { id: '1', name: 'メモ名', displayName: '画面名A' },
+      { id: '2', name: 'ok' },
+      { id: '3', name: '型違い' },
+    ])
+  })
+
+  it('幅 0 以下は原寸（undefined）に倒す', () => {
+    const s = normalizeState({
+      users: [],
+      presets: [
+        { id: 'p1', width: 0 },
+        { id: 'p2', width: -10 },
+        { id: 'p3', width: 480 },
+      ],
+    })
+    expect(s.presets[0].width).toBeUndefined()
+    expect(s.presets[1].width).toBeUndefined()
+    expect(s.presets[2].width).toBe(480)
+  })
+
+  it('nameLabel が壊れていても（null / 配列 / 文字列）既定で補完する', () => {
+    const s = normalizeState({
+      users: [],
+      presets: [
+        { id: 'p1', nameLabel: null },
+        { id: 'p2', nameLabel: [] },
+        { id: 'p3', nameLabel: 'nope' },
+      ],
+    })
+    for (const p of s.presets) expect(p.nameLabel).toEqual(DEFAULT_NAME_LABEL)
+  })
+
+  it('不正な fit は既定に倒す', () => {
+    const s = normalizeState({
+      users: [],
+      presets: [
+        { id: 'p1', nameLabel: { fit: 'cover' } },
+        { id: 'p2', nameLabel: { fit: 'stretch' } },
+      ],
+    })
+    expect(s.presets[0].nameLabel.fit).toBe(DEFAULT_NAME_LABEL.fit)
+    expect(s.presets[1].nameLabel.fit).toBe('stretch')
+  })
+
+  it('nameLabel が無い旧プリセットは既定（表示OFF）で補完する', () => {
+    const s = normalizeState({ users: [], presets: [{ id: 'p1' }] })
+    expect(s.presets[0].nameLabel).toEqual(DEFAULT_NAME_LABEL)
+    expect(s.presets[0].nameLabel.show).toBe(false)
+  })
+
+  it('部分 nameLabel を既定で補完し、不正な align は既定に倒す', () => {
+    const s = normalizeState({
+      users: [],
+      presets: [{ id: 'p1', nameLabel: { show: true, fontSize: 64, align: 'middle' } }],
+    })
+    const n = s.presets[0].nameLabel
+    expect(n.show).toBe(true)
+    expect(n.fontSize).toBe(64)
+    expect(n.align).toBe(DEFAULT_NAME_LABEL.align)
+    expect(n.outlineColor).toBe(DEFAULT_NAME_LABEL.outlineColor)
+    expect(n.offsetY).toBe(DEFAULT_NAME_LABEL.offsetY)
   })
 
   it('壊れた pairing（存在しない userId / presetId 参照）を落とす', () => {

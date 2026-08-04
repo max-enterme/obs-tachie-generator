@@ -1,9 +1,24 @@
 import { useEffect, useState, type CSSProperties } from 'react'
+import {
+  cssColorWithOpacity,
+  flattenText,
+  safeColor,
+  safeFontFamily,
+} from '../lib/generateCss'
 import type { Preset } from '../lib/types'
 
 interface Props {
   /** プレビューに映すプリセット（見た目の source）。null なら空ビューポート。 */
   preset: Preset | null
+  /** 名前表示ONのときに描くテキスト。 */
+  nameText?: string
+  /**
+   * `nameText` が空のとき、仮名（「名前」）で見え方だけ見せるか。
+   * ②（プリセット編集＝まだ「誰」が決まっていない）では true、
+   * ③（出力）では **false**：出力CSSは名前が空なら `body::before` を出さないので、
+   * 仮名を出すとプレビューと出力が食い違う。
+   */
+  sampleWhenEmpty?: boolean
   /** 見出し。既定は「プレビュー」。 */
   title?: string
 }
@@ -21,7 +36,12 @@ const FALLBACK_WIDTH = 384
  * - 幅が原寸（未指定）のときは、画像の**実サイズ**を基準1920に対する割合で描く（960px画像＝約50%）。
  * 画像はプリセット由来で、ユーザーIDは見た目に出ない。
  */
-export default function TachiePreview({ preset, title = 'プレビュー' }: Props) {
+export default function TachiePreview({
+  preset,
+  nameText = '',
+  sampleWhenEmpty = false,
+  title = 'プレビュー',
+}: Props) {
   const [inCall, setInCall] = useState(true)
   const [speaking, setSpeaking] = useState(false)
   const [naturalW, setNaturalW] = useState<number | null>(null)
@@ -62,6 +82,10 @@ export default function TachiePreview({ preset, title = 'プレビュー' }: Pro
   const dimmed = dimWhenQuiet && !effectiveSpeaking
 
   const figStyle: CSSProperties = {
+    // 立ち絵もビューポート基準の絶対配置にする（名前ラベルと同じ座標系。
+    // 余白(padding)で寄せると % がその分だけ縮んだ幅に対して解決され、実寸とズレる）。
+    left: `${leftPct}%`,
+    bottom: `${bottomPct}%`,
     width: `${widthPct}%`,
     ['--tp-jump' as string]: `${speak?.jumpPx ?? 0}px`,
     ['--tp-outline' as string]: speak?.outlineColor ?? '#FFFFFF',
@@ -71,10 +95,71 @@ export default function TachiePreview({ preset, title = 'プレビュー' }: Pro
     animation: anims.length ? anims.join(', ') : undefined,
   }
 
-  const rowStyle: CSSProperties = {
-    paddingLeft: `${leftPct}%`,
-    paddingBottom: `${bottomPct}%`,
-  }
+  // --- 名前ラベル（出力CSSの body::before と同じ計算をプレビュー比率に写す） ---
+  const label = preset?.nameLabel
+  // 出力の content と同じ正規化（改行・制御文字は空白へ潰して1行に）。
+  const cleanedName = flattenText(nameText).trim()
+  const usingSample = cleanedName === '' && sampleWhenEmpty
+  const labelText = cleanedName || '名前'
+  // 出力CSSは「名前が空なら body::before を出さない」。仮名を出さない画面では同じく描かない。
+  const showLabel = (label?.show ?? false) && (cleanedName !== '' || usingSample)
+  // 名前表示ONなのに名前が空＝出力に出ない、を気づけるようにする。
+  const emptyNameWarning = (label?.show ?? false) && cleanedName === '' && !usingSample
+  // 文字サイズ・縁取り幅はビューポート幅に比例させる（cqw = コンテナ幅の1%）。
+  const cqw = (px: number) => `${(px / REF_W) * 100}cqw`
+  // 行揃えの基準幅：明示指定 > 画像の実サイズ（出力CSSの箱幅と同じ決め方）。
+  const nameBoxWidth = width ?? naturalW ?? undefined
+  // 帯を文字幅に合わせるモードでは width を持たせず、transform で立ち絵に位置合わせする（出力CSSと同じ）。
+  const hug = (label?.background ?? false) && label?.fit === 'text'
+  const anchor = hug && nameBoxWidth != null && label ? label.align : 'left'
+  const anchorShift =
+    anchor === 'center' ? (nameBoxWidth ?? 0) / 2 : anchor === 'right' ? (nameBoxWidth ?? 0) : 0
+  const nameStyle: CSSProperties = label
+    ? {
+        left: `${((left + label.offsetX + anchorShift) / REF_W) * 100}%`,
+        bottom: `${((bottom + label.offsetY) / REF_H) * 100}%`,
+        transform:
+          anchor === 'center'
+            ? 'translateX(-50%)'
+            : anchor === 'right'
+              ? 'translateX(-100%)'
+              : undefined,
+        width: !hug && nameBoxWidth != null ? `${(nameBoxWidth / REF_W) * 100}%` : undefined,
+        textAlign: !hug && nameBoxWidth != null ? label.align : undefined,
+        boxSizing: 'border-box',
+        background: label.background
+          ? cssColorWithOpacity(label.backgroundColor, label.backgroundOpacity)
+          : undefined,
+        padding: label.background
+          ? `${cqw(label.backgroundPadY)} ${cqw(label.backgroundPadX)}`
+          : undefined,
+        borderRadius: label.background ? cqw(label.backgroundRadius) : undefined,
+        // 出力と同じ安全化・丸めを通す（プレビューだけ違う見え方にならないように）。
+        fontSize: cqw(Math.max(1, label.fontSize)),
+        fontWeight: label.bold ? 700 : 400,
+        fontFamily: safeFontFamily(label.fontFamily) || undefined,
+        color: safeColor(label.color),
+        textShadow: label.outline && label.outlineWidth > 0
+          ? [
+              [1, 0],
+              [-1, 0],
+              [0, 1],
+              [0, -1],
+              [1, 1],
+              [1, -1],
+              [-1, 1],
+              [-1, -1],
+            ]
+              .map(
+                ([x, y]) =>
+                  `${cqw(x * label.outlineWidth)} ${cqw(y * label.outlineWidth)} 0 ${safeColor(
+                    label.outlineColor,
+                  )}`,
+              )
+              .join(', ')
+          : undefined,
+      }
+    : {}
 
   // 「通話にいないときは立ち絵を隠す」設定 かつ 通話にいない なら、立ち絵は非表示。
   const hiddenNow = (preset?.hideWhenAway ?? false) && !inCall
@@ -122,21 +207,24 @@ export default function TachiePreview({ preset, title = 'プレビュー' }: Pro
         }}
       >
         <span className="tp-status">{status}</span>
-        {preset && !hiddenNow && (
-          <div className="tp-row" style={rowStyle}>
-            {preset.imageUrl ? (
-              <img
-                className="tp-img"
-                style={figStyle}
-                src={preset.imageUrl}
-                alt={preset.name || 'プリセット'}
-                onLoad={(e) => setNaturalW(e.currentTarget.naturalWidth || null)}
-              />
-            ) : (
-              <div className="tp-placeholder" style={figStyle} aria-label="画像未設定">
-                <span>立ち絵</span>
-              </div>
-            )}
+        {preset &&
+          !hiddenNow &&
+          (preset.imageUrl ? (
+            <img
+              className="tp-img"
+              style={figStyle}
+              src={preset.imageUrl}
+              alt={preset.name || 'プリセット'}
+              onLoad={(e) => setNaturalW(e.currentTarget.naturalWidth || null)}
+            />
+          ) : (
+            <div className="tp-placeholder" style={figStyle} aria-label="画像未設定">
+              <span>立ち絵</span>
+            </div>
+          ))}
+        {showLabel && !hiddenNow && (
+          <div className="tp-name" style={nameStyle}>
+            {labelText}
           </div>
         )}
       </div>
@@ -145,7 +233,13 @@ export default function TachiePreview({ preset, title = 'プレビュー' }: Pro
         透過（市松）背景・基準 1920×1080 での見え方の目安。
         {inCall ? '画面クリックで 発話⇄静か を切替できます。' : '通話にいなくても立ち絵は出ます（常時表示）。'}
         {preset && width == null && ' 幅は原寸＝画像の実サイズで表示。'}
+        {usingSample && ' 名前は仮名（実際はユーザーの「画面に出す名前」）。'}
       </p>
+      {emptyNameWarning && (
+        <p className="hint" style={{ color: 'var(--warn)' }} role="status">
+          名前表示は ON ですが「画面に出す名前」が空のため、出力CSSに名前は入りません（ステップ①で入力してください）。
+        </p>
+      )}
     </div>
   )
 }

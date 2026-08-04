@@ -7,6 +7,7 @@ import {
 import {
   DEFAULT_OPTIONS,
   type GenerateOptions,
+  type NameLabel,
   type SpeakEffect,
   type TachieUser,
 } from './types'
@@ -22,15 +23,21 @@ const USER_B: TachieUser = {
   imageUrl: 'data:image/png;base64,DDDDEEEEFFFF',
 }
 
-type OptionsOverride = Partial<Omit<GenerateOptions, 'speak'>> & {
+type OptionsOverride = Partial<Omit<GenerateOptions, 'speak' | 'nameLabel'>> & {
   speak?: Partial<SpeakEffect>
+  nameLabel?: Partial<NameLabel>
 }
 
 const opts = (over: OptionsOverride = {}): GenerateOptions => ({
   ...DEFAULT_OPTIONS,
   ...over,
   speak: { ...DEFAULT_OPTIONS.speak, ...(over.speak ?? {}) },
+  nameLabel: { ...DEFAULT_OPTIONS.nameLabel, ...(over.nameLabel ?? {}) },
 })
+
+/** 名前表示ONのオプション（テスト用の短縮）。 */
+const nameOn = (over: Partial<NameLabel> = {}, rest: OptionsOverride = {}) =>
+  opts({ ...rest, nameLabel: { show: true, ...over } })
 
 describe('generateStandaloneCss (常時表示 / body::after)', () => {
   it('立ち絵を :root に data URI で埋め込む', () => {
@@ -177,6 +184,361 @@ describe('generateStandaloneCss (常時表示 / body::after)', () => {
     expect(off).toMatch(/body::after \{[^}]*display: block/)
     expect(off).not.toMatch(
       /body:has\(img\[src\*="avatars\/[0-9]+"\]\)::after \{\s*display: block/,
+    )
+  })
+})
+
+describe('名前表示 (body::before / 任意テキスト)', () => {
+  it('既定（表示OFF）では body::before を出さない', () => {
+    const css = generateStandaloneCss(USER_A, opts())
+    expect(css).not.toContain('body::before')
+  })
+
+  it('表示ONで displayName を content に出す（メモ名より優先）', () => {
+    const css = generateStandaloneCss({ ...USER_A, displayName: '画面名A' }, nameOn())
+    expect(css).toContain('body::before {')
+    expect(css).toContain('content: "画面名A";')
+    expect(css).not.toContain('content: "ユーザーA";')
+  })
+
+  it('displayName が空ならメモ用の表示名を使う', () => {
+    expect(generateStandaloneCss(USER_A, nameOn())).toContain('content: "ユーザーA";')
+    expect(generateStandaloneCss({ ...USER_A, displayName: '   ' }, nameOn())).toContain(
+      'content: "ユーザーA";',
+    )
+  })
+
+  it('名前が空なら表示ONでも body::before を出さない', () => {
+    const css = generateStandaloneCss({ ...USER_A, name: '', displayName: '' }, nameOn())
+    expect(css).not.toContain('body::before')
+    // 立ち絵は従来どおり出る
+    expect(css).toContain('body::after {')
+  })
+
+  it('位置は立ち絵の left/bottom にオフセットを足した数値で出す', () => {
+    const css = generateStandaloneCss(
+      USER_A,
+      nameOn({ offsetX: 12, offsetY: -20 }, { left: 100, bottom: 40 }),
+    )
+    expect(css).toMatch(/body::before \{[^}]*left: 112px;/)
+    expect(css).toMatch(/body::before \{[^}]*bottom: 20px;/)
+  })
+
+  it('文字サイズ・色・太字・縁取りを反映する', () => {
+    const css = generateStandaloneCss(
+      USER_A,
+      nameOn({ fontSize: 48, color: '#ff0000', bold: false, outlineWidth: 2, outlineColor: '#000000' }),
+    )
+    expect(css).toContain('font-size: 48px;')
+    expect(css).toContain('font-weight: 400;')
+    expect(css).toContain('color: #ff0000;')
+    expect(css).toContain('text-shadow: 2px 0px 0 #000000,')
+    expect(css).toContain('-2px -2px 0 #000000;')
+  })
+
+  it('縁取りOFFなら text-shadow を出さない', () => {
+    expect(generateStandaloneCss(USER_A, nameOn({ outline: false }))).not.toContain('text-shadow')
+  })
+
+  it('行揃えと幅は箱幅が決まるときだけ出す（幅も実測も無ければ出さない）', () => {
+    const withWidth = generateStandaloneCss(USER_A, nameOn({ align: 'center' }, { width: 480 }))
+    expect(withWidth).toMatch(/body::before \{[^}]*width: 480px;/)
+    expect(withWidth).toContain('text-align: center;')
+
+    const noWidth = generateStandaloneCss(USER_A, nameOn({ align: 'center' }))
+    expect(noWidth).not.toContain('text-align:')
+  })
+
+  it('幅が原寸でも、画像の実サイズがあれば行揃えの箱幅に使う（注記付き）', () => {
+    const css = generateStandaloneCss(
+      USER_A,
+      nameOn({ align: 'center' }, { width: undefined, imageNaturalWidth: 640 }),
+    )
+    expect(css).toMatch(/body::before \{[^}]*width: 640px;/)
+    expect(css).toContain('text-align: center;')
+    // 立ち絵自体は原寸のまま（body::after に width を出さない）
+    expect(css).not.toMatch(/body::after \{[^}]*width:/)
+    // 焼き込みと分かる注記
+    expect(css).toContain('立ち絵画像の実サイズ')
+  })
+
+  it('width 明示があれば実測より width を優先する', () => {
+    const css = generateStandaloneCss(
+      USER_A,
+      nameOn({ align: 'right' }, { width: 300, imageNaturalWidth: 640 }),
+    )
+    expect(css).toMatch(/body::before \{[^}]*width: 300px;/)
+    expect(css).not.toContain('width: 640px;')
+    expect(css).not.toContain('立ち絵画像の実サイズ')
+  })
+
+  it('実測が 0 / 未指定なら箱幅を出さない', () => {
+    const zero = generateStandaloneCss(USER_A, nameOn({}, { imageNaturalWidth: 0 }))
+    expect(zero).not.toContain('text-align:')
+    const none = generateStandaloneCss(USER_A, nameOn({}, { imageNaturalWidth: undefined }))
+    expect(none).not.toContain('text-align:')
+  })
+
+  it('フォント名は指定時だけ出し、危険な文字を落として引用する', () => {
+    expect(generateStandaloneCss(USER_A, nameOn())).not.toContain('font-family:')
+    expect(generateStandaloneCss(USER_A, nameOn({ fontFamily: 'Noto Sans JP, メイリオ' }))).toContain(
+      'font-family: "Noto Sans JP", "メイリオ";',
+    )
+    const injected = generateStandaloneCss(
+      USER_A,
+      nameOn({ fontFamily: 'x; } body { display: none' }),
+    )
+    expect(injected).toContain('font-family: "x body display none";')
+    expect(injected).not.toContain('} body {')
+  })
+
+  it('数字始まり・ピリオド入りのフォント名も引用して有効な宣言にする', () => {
+    // 無引用の識別子は数字始まりにできず、宣言ごと捨てられてしまう（黙って効かない）
+    expect(generateStandaloneCss(USER_A, nameOn({ fontFamily: '07やさしさゴシック' }))).toContain(
+      'font-family: "07やさしさゴシック";',
+    )
+    expect(generateStandaloneCss(USER_A, nameOn({ fontFamily: 'Foo.Bar' }))).toContain(
+      'font-family: "Foo.Bar";',
+    )
+    // ジェネリックはキーワードとして解釈させたいので引用しない
+    expect(
+      generateStandaloneCss(USER_A, nameOn({ fontFamily: 'Meiryo, sans-serif' })),
+    ).toContain('font-family: "Meiryo", sans-serif;')
+    // CSS 全体キーワードは引用されてファミリ名になる（意図せぬ継承・初期化を防ぐ）
+    expect(generateStandaloneCss(USER_A, nameOn({ fontFamily: 'inherit' }))).toContain(
+      'font-family: "inherit";',
+    )
+  })
+
+  it('メモ名で CSS コメントを閉じられない', () => {
+    const css = generateStandaloneCss(
+      { ...USER_A, name: '*/ body { display: none } /*', displayName: '画面名A' },
+      nameOn(),
+    )
+    expect(css).not.toContain('*/ body { display: none }')
+    expect(css).toContain('* / body { display: none } /*')
+    // :root ブロックが割れていない（変数定義が同じブロックの中に残る）
+    expect(css).toMatch(/:root \{[\s\S]*?--img-stand-url-123456789012345678:[\s\S]*?\n\}/)
+  })
+
+  it('文字サイズ 0（入力欄を空にした場合）は 1px に丸める', () => {
+    expect(generateStandaloneCss(USER_A, nameOn({ fontSize: 0 }))).toContain('font-size: 1px;')
+  })
+
+  it('縁取りONでも幅0なら text-shadow を出さない', () => {
+    expect(generateStandaloneCss(USER_A, nameOn({ outline: true, outlineWidth: 0 }))).not.toContain(
+      'text-shadow',
+    )
+  })
+
+  it('位置は小数でも読める桁に丸める', () => {
+    const css = generateStandaloneCss(
+      USER_A,
+      nameOn({ offsetX: 0.05, offsetY: -8.2 }, { left: 16.1, bottom: 16.1 }),
+    )
+    expect(css).toMatch(/body::before \{[^}]*left: 16.15px;/)
+    expect(css).toMatch(/body::before \{[^}]*bottom: 7.9px;/)
+  })
+
+  it('立ち絵の幅 0 は箱幅に採らない（立ち絵が消える指定を基準にしない）', () => {
+    const css = generateStandaloneCss(USER_A, nameOn({ align: 'center' }, { width: 0 }))
+    expect(css).not.toContain('text-align:')
+  })
+
+  it('行揃え × 帯の幅モードの組み合わせ', () => {
+    // 背景OFF + stretch 指定 → 従来どおり width + text-align（背景は出ない）
+    const noBg = generateStandaloneCss(
+      USER_A,
+      nameOn({ background: false, fit: 'stretch', align: 'right' }, { width: 400 }),
+    )
+    expect(noBg).toMatch(/body::before \{[^}]*width: 400px;/)
+    expect(noBg).toContain('text-align: right;')
+    expect(noBg).not.toContain('background:')
+
+    // stretch + 左寄せ
+    const stretchLeft = generateStandaloneCss(
+      USER_A,
+      nameOn({ background: true, fit: 'stretch', align: 'left' }, { left: 100, width: 400 }),
+    )
+    expect(stretchLeft).toContain('text-align: left;')
+    expect(stretchLeft).toMatch(/body::before \{[^}]*left: 100px;/)
+
+    // hug + 箱幅なし → align は無視され左寄せ相当（アンカーも出ない）
+    const hugNoWidth = generateStandaloneCss(
+      USER_A,
+      nameOn({ background: true, fit: 'text', align: 'center' }, { left: 100 }),
+    )
+    expect(hugNoWidth).toMatch(/body::before \{[^}]*left: 100px;/)
+    expect(hugNoWidth).not.toMatch(/body::before \{[^}]*transform:/)
+
+    // stretch + 箱幅なし → width が出ないので実際は文字幅（注記が無いことも確認）
+    expect(
+      generateStandaloneCss(
+        USER_A,
+        nameOn({ background: true, fit: 'stretch', align: 'center' }, { left: 100 }),
+      ),
+    ).not.toMatch(/body::before \{[^}]*width:/)
+  })
+
+  it('まとめ版（combined）には名前を出さない', () => {
+    const css = generateCombinedCss([USER_A], nameOn())
+    expect(css).not.toContain('body::before')
+  })
+
+  it('名前のダブルクォート・バックスラッシュ・改行で CSS が壊れない', () => {
+    const css = generateStandaloneCss(
+      { ...USER_A, displayName: 'a"b\\c\nd' },
+      nameOn(),
+    )
+    expect(css).toContain('content: "a\\"b\\\\c d";')
+  })
+
+  it('不正な文字色・縁取り色は白に倒す', () => {
+    const css = generateStandaloneCss(
+      USER_A,
+      nameOn({ color: 'red; } body { display:none', outlineColor: 'nope' }),
+    )
+    expect(css).toContain('color: #FFFFFF;')
+    expect(css).toContain('0 #FFFFFF')
+    expect(css).not.toContain('display:none')
+  })
+
+  it('hideWhenAway では名前も在室時だけ表示する', () => {
+    const css = generateStandaloneCss(USER_A, nameOn({}, { hideWhenAway: true }))
+    expect(css).toMatch(/body::before \{[^}]*display: none;/)
+    expect(css).toContain(
+      'body:has(img[src*="avatars/123456789012345678"])::before,\nbody:has(img[src*="avatars/123456789012345678"])::after {',
+    )
+  })
+
+  it('背景OFF（既定）では background / padding を出さない', () => {
+    const css = generateStandaloneCss(USER_A, nameOn())
+    expect(css).not.toContain('background:')
+    expect(css).not.toContain('padding:')
+    // keyframes 側の transform とは別に、名前ブロックには出さない
+    expect(css).not.toMatch(/body::before \{[^}]*transform:/)
+  })
+
+  it('背景ON（文字に合わせる）：帯は文字幅＝width を出さず、transform で位置合わせ', () => {
+    const css = generateStandaloneCss(
+      USER_A,
+      nameOn(
+        { background: true, fit: 'text', align: 'center', backgroundOpacity: 60 },
+        { left: 100, width: 400 },
+      ),
+    )
+    expect(css).toMatch(/body::before \{[^}]*background: rgba\(0, 0, 0, 0\.6\);/)
+    expect(css).toContain('padding: 6px 12px;')
+    expect(css).toContain('border-radius: 6px;')
+    // 帯は文字幅に縮むので width / text-align は出さない
+    expect(css).not.toMatch(/body::before \{[^}]*width:/)
+    expect(css).not.toContain('text-align:')
+    // 立ち絵の中央（100 + 400/2）へアンカー
+    expect(css).toMatch(/body::before \{[^}]*left: 300px;/)
+    expect(css).toContain('transform: translateX(-50%);')
+  })
+
+  it('背景ON（立ち絵の幅いっぱい）：width + text-align + box-sizing を出す', () => {
+    const css = generateStandaloneCss(
+      USER_A,
+      nameOn({ background: true, fit: 'stretch', align: 'center' }, { left: 100, width: 400 }),
+    )
+    expect(css).toMatch(/body::before \{[^}]*width: 400px;/)
+    expect(css).toContain('text-align: center;')
+    expect(css).toContain('box-sizing: border-box;')
+    expect(css).toMatch(/body::before \{[^}]*left: 100px;/)
+    expect(css).not.toMatch(/body::before \{[^}]*transform:/)
+  })
+
+  it('帯の右寄せは右端アンカー、左寄せはアンカーなし', () => {
+    const right = generateStandaloneCss(
+      USER_A,
+      nameOn({ background: true, fit: 'text', align: 'right' }, { left: 100, width: 400 }),
+    )
+    expect(right).toMatch(/body::before \{[^}]*left: 500px;/)
+    expect(right).toContain('transform: translateX(-100%);')
+
+    const leftAligned = generateStandaloneCss(
+      USER_A,
+      nameOn({ background: true, fit: 'text', align: 'left' }, { left: 100, width: 400 }),
+    )
+    expect(leftAligned).toMatch(/body::before \{[^}]*left: 100px;/)
+    expect(leftAligned).not.toMatch(/body::before \{[^}]*transform:/)
+  })
+
+  it('帯の色・不透明度・余白0・角丸0 を反映する', () => {
+    const css = generateStandaloneCss(
+      USER_A,
+      nameOn({
+        background: true,
+        backgroundColor: '#ff0000',
+        backgroundOpacity: 100,
+        backgroundPadX: 0,
+        backgroundPadY: 0,
+        backgroundRadius: 0,
+      }),
+    )
+    expect(css).toContain('background: rgba(255, 0, 0, 1);')
+    expect(css).not.toContain('padding:')
+    expect(css).not.toContain('border-radius:')
+  })
+
+  it('帯の色が不正なら白に倒し、不透明度は 0–100 に丸める', () => {
+    const bad = generateStandaloneCss(
+      USER_A,
+      nameOn({ background: true, backgroundColor: 'red; } body { display:none', backgroundOpacity: 999 }),
+    )
+    expect(bad).toContain('background: rgba(255, 255, 255, 1);')
+    expect(bad).not.toContain('display:none')
+
+    const negative = generateStandaloneCss(
+      USER_A,
+      nameOn({ background: true, backgroundColor: '#000000', backgroundOpacity: -50 }),
+    )
+    expect(negative).toContain('background: rgba(0, 0, 0, 0);')
+  })
+
+  it('立ち絵より前面に出す（::after は後に描かれるため）', () => {
+    expect(generateStandaloneCss(USER_A, nameOn())).toMatch(/body::before \{[^}]*z-index: 1;/)
+  })
+})
+
+describe('名前OFF の出力（001 からの非退行）', () => {
+  it('演出なし・名前OFF の出力が期待どおりの文字列と一致する', () => {
+    const css = generateStandaloneCss(
+      USER_A,
+      opts({ speak: { bounce: false, outline: false, blink: false } }),
+    )
+    expect(css).toBe(
+      `:root {
+  /* ユーザーA (123456789012345678) */
+  --img-stand-url-123456789012345678: url("data:image/png;base64,AAAABBBBCCCC");
+}
+
+/* 立ち絵は body::after ただ1つで描画（唯一の描画源＝位置ズレが起きない）。
+   Streamkit の実要素は全部隠し、発話だけ検知して body::after を演出する。 */
+
+body, #root {
+  overflow: hidden !important;
+}
+
+/* 立ち絵（常時表示：通話に居ても居なくても同じ位置） */
+body::after {
+  content: var(--img-stand-url-123456789012345678);
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  display: block;
+}
+
+img {
+  display: none !important;
+}
+
+[class*="Voice_name__"], [class*="Voice_user__"] {
+  display: none !important;
+}
+`,
     )
   })
 })

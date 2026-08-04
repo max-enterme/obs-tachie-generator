@@ -6,10 +6,12 @@ import CombinePanel from './ui/CombinePanel'
 import OutputPanel from './ui/OutputPanel'
 import TachiePreview from './ui/TachiePreview'
 import Stepper, { type StepDef } from './ui/Stepper'
+import { useImageNaturalWidth } from './ui/useImageNaturalWidth'
 import { loadState, saveState } from './lib/state'
 import {
   makeDefaultPreset,
   newId,
+  resolveDisplayName,
   type AppUser,
   type Pairing,
   type Preset,
@@ -49,10 +51,19 @@ export default function App() {
       : presets[0]?.id ?? null
   const selectedUser = users.find((u) => u.id === effUserId) ?? null
   const selectedPreset = presets.find((p) => p.id === effPresetId) ?? null
+  // ②のプレビュー用の名前。プリセット単体は「誰」を持たないので、選択中（無ければ先頭）の
+  // ユーザーの名前を仮に当てる（誰も居なければ TachiePreview 側の仮名にフォールバック）。
+  const sampleNameText = selectedUser ? resolveDisplayName(selectedUser) : ''
+  // 幅が原寸のプリセットでも名前の行揃えを使えるよう、画像の実サイズを測っておく。
+  const focusedNaturalW = useImageNaturalWidth(focusedPreset?.imageUrl)
+  const selectedNaturalW = useImageNaturalWidth(selectedPreset?.imageUrl)
 
   // --- users ---
   function addUser(user: AppUser) {
     setUsers((prev) => [...prev.filter((u) => u.id !== user.id), user])
+  }
+  function changeUser(next: AppUser) {
+    setUsers((prev) => prev.map((u) => (u.id === next.id ? next : u)))
   }
   function removeUser(id: string) {
     setUsers((prev) => prev.filter((u) => u.id !== id))
@@ -127,7 +138,7 @@ export default function App() {
               </div>
             </div>
             <AppUserForm onAdd={addUser} />
-            <AppUserList users={users} onRemove={removeUser} />
+            <AppUserList users={users} onRemove={removeUser} onChange={changeUser} />
           </section>
         )}
 
@@ -150,8 +161,14 @@ export default function App() {
               onAdd={addPreset}
               onRemove={removePreset}
               onChange={changePreset}
+              imageNaturalWidth={focusedNaturalW}
             />
-            <TachiePreview preset={focusedPreset} title="プレビュー" />
+            <TachiePreview
+              preset={focusedPreset}
+              nameText={sampleNameText}
+              sampleWhenEmpty
+              title="プレビュー"
+            />
           </section>
         )}
 
@@ -180,9 +197,17 @@ export default function App() {
                 onRecall={recallPairing}
                 onRemove={removePairing}
               />
-              <TachiePreview preset={selectedPreset} title="プレビュー" />
+              <TachiePreview
+                preset={selectedPreset}
+                nameText={selectedUser ? resolveDisplayName(selectedUser) : ''}
+                title="プレビュー"
+              />
             </div>
-            <OutputPanel user={selectedUser} preset={selectedPreset} />
+            <OutputPanel
+              user={selectedUser}
+              preset={selectedPreset}
+              imageNaturalWidth={selectedNaturalW}
+            />
           </section>
         )}
 

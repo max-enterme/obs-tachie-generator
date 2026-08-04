@@ -1,7 +1,14 @@
 import { useState } from 'react'
 import { fileToDataUri, isWithinSizeLimit } from '../lib/image'
 import { resolveImageSource, type ImageSourceMode } from '../lib/imageSource'
-import { resetPresetOptions, type Preset, type SpeakEffect } from '../lib/types'
+import {
+  resetPresetOptions,
+  type NameAlign,
+  type NameFit,
+  type NameLabel,
+  type Preset,
+  type SpeakEffect,
+} from '../lib/types'
 
 interface Props {
   presets: Preset[]
@@ -10,6 +17,8 @@ interface Props {
   onAdd: () => void
   onRemove: (id: string) => void
   onChange: (preset: Preset) => void
+  /** 編集中プリセットの画像の実サイズ（幅 px）。幅が原寸のときの行揃えに使う。測定前は null。 */
+  imageNaturalWidth?: number | null
 }
 
 /** 最大埋め込み幅の既定。0 で原寸（＝リサイズしない）。 */
@@ -29,6 +38,7 @@ export default function PresetPanel({
   onAdd,
   onRemove,
   onChange,
+  imageNaturalWidth,
 }: Props) {
   const editing = presets.find((p) => p.id === editingId) ?? null
 
@@ -48,6 +58,15 @@ export default function PresetPanel({
     if (!editing) return
     onChange({ ...editing, speak: { ...editing.speak, [key]: value } })
   }
+  function setName<K extends keyof NameLabel>(key: K, value: NameLabel[K]) {
+    if (!editing) return
+    onChange({ ...editing, nameLabel: { ...editing.nameLabel, [key]: value } })
+  }
+
+  // 行揃えは「立ち絵の幅」が決まっていないと揃えようがない。幅指定が無くても、画像の実サイズが
+  // 測れていればそれを基準にできる（＝画像すら無い／読めないときだけ無効）。
+  const alignBaseWidth = editing?.width ?? imageNaturalWidth ?? null
+  const alignDisabled = alignBaseWidth == null
 
   async function onFile(file: File | undefined) {
     if (!file || !editing) return
@@ -211,9 +230,7 @@ export default function PresetPanel({
                 <div className="field">
                   <label htmlFor="pr-maxw">
                     埋め込み最大幅(px)・0 で原寸
-                    <small style={{ display: 'block', color: 'var(--muted)' }}>
-                      ※埋め込み(dataURI)時に縮小／「URLのまま」は対象外
-                    </small>
+                    <small>埋め込み(dataURI)時に縮小／「URLのまま」は対象外</small>
                   </label>
                   <input
                     id="pr-maxw"
@@ -261,8 +278,9 @@ export default function PresetPanel({
                   min={0}
                   value={editing.width ?? ''}
                   onChange={(e) => {
-                    const v = e.target.value
-                    set('width', v === '' ? undefined : Number(v))
+                    const v = Number(e.target.value)
+                    // 空・0 以下は「原寸」（幅 0 は立ち絵が消えるだけなので受け付けない）。
+                    set('width', e.target.value === '' || v <= 0 ? undefined : v)
                   }}
                 />
               </div>
@@ -307,7 +325,12 @@ export default function PresetPanel({
 
             <div className="row" style={{ marginTop: 12 }}>
               <div className="field">
-                <label htmlFor="pr-jump">跳ね高さ(px)</label>
+                <label htmlFor="pr-jump">
+                  跳ね高さ(px)
+                  {!editing.speak.bounce && (
+                    <small className="why">上の「ぴょこぴょこ」を ON にすると使えます</small>
+                  )}
+                </label>
                 <input
                   id="pr-jump"
                   type="number"
@@ -328,7 +351,12 @@ export default function PresetPanel({
                 />
               </div>
               <div className="field">
-                <label htmlFor="pr-color">枠・後光の色</label>
+                <label htmlFor="pr-color">
+                  枠・後光の色
+                  {!editing.speak.outline && (
+                    <small className="why">上の「枠・後光」を ON にすると使えます</small>
+                  )}
+                </label>
                 <input
                   id="pr-color"
                   type="color"
@@ -338,7 +366,12 @@ export default function PresetPanel({
                 />
               </div>
               <div className="field">
-                <label htmlFor="pr-outw">枠・後光の幅(px)</label>
+                <label htmlFor="pr-outw">
+                  枠・後光の幅(px)
+                  {!editing.speak.outline && (
+                    <small className="why">上の「枠・後光」を ON にすると使えます</small>
+                  )}
+                </label>
                 <input
                   id="pr-outw"
                   type="number"
@@ -349,6 +382,280 @@ export default function PresetPanel({
                 />
               </div>
             </div>
+
+            <div className="subhead">名前表示</div>
+            <label className="toggle" htmlFor="pr-name-show">
+              <input
+                id="pr-name-show"
+                type="checkbox"
+                checked={editing.nameLabel.show}
+                onChange={(e) => setName('show', e.target.checked)}
+              />
+              <span className="sw" />
+              <span className="lab">
+                名前を表示する
+                <small>
+                  ステップ①の「画面に出す名前」を立ち絵に添えて出す（Discord のアカウント名ではなく任意の文字列）
+                </small>
+              </span>
+            </label>
+
+            {editing.nameLabel.show && (
+              <>
+                <div className="row">
+                  <div className="field">
+                    <label htmlFor="pr-name-x">
+                      横位置(px)
+                      <small>立ち絵の左端から</small>
+                    </label>
+                    <input
+                      id="pr-name-x"
+                      type="number"
+                      value={editing.nameLabel.offsetX}
+                      onChange={(e) => setName('offsetX', Number(e.target.value))}
+                    />
+                  </div>
+                  <div className="field">
+                    <label htmlFor="pr-name-y">
+                      縦位置(px)
+                      <small>立ち絵の下端から（負で下）</small>
+                    </label>
+                    <input
+                      id="pr-name-y"
+                      type="number"
+                      value={editing.nameLabel.offsetY}
+                      onChange={(e) => setName('offsetY', Number(e.target.value))}
+                    />
+                  </div>
+                  <div className="field">
+                    <label htmlFor="pr-name-size">文字サイズ(px)</label>
+                    <input
+                      id="pr-name-size"
+                      type="number"
+                      min={1}
+                      value={editing.nameLabel.fontSize}
+                      onChange={(e) => setName('fontSize', Number(e.target.value))}
+                    />
+                  </div>
+                  <div className="field">
+                    <label htmlFor="pr-name-color">文字色</label>
+                    <input
+                      id="pr-name-color"
+                      type="color"
+                      value={editing.nameLabel.color}
+                      onChange={(e) => setName('color', e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="row">
+                  <div className="field">
+                    <label htmlFor="pr-name-font">
+                      フォント（任意）
+                      <small>OBS(CEF) にあるフォント名のみ・空でそのまま</small>
+                    </label>
+                    <input
+                      id="pr-name-font"
+                      type="text"
+                      placeholder="Noto Sans JP, メイリオ など"
+                      value={editing.nameLabel.fontFamily}
+                      onChange={(e) => setName('fontFamily', e.target.value)}
+                    />
+                  </div>
+                  <div className="field">
+                    <label htmlFor="pr-name-align">
+                      行揃え
+                      {alignDisabled ? (
+                        <small className="why">
+                          幅 width(px) を入れるか、読み込める立ち絵画像を設定すると使えます
+                        </small>
+                      ) : (
+                        <small>
+                          幅 {alignBaseWidth}px の中で揃えます
+                          {editing.width == null && '（画像の実サイズ）'}
+                        </small>
+                      )}
+                    </label>
+                    <select
+                      id="pr-name-align"
+                      value={editing.nameLabel.align}
+                      onChange={(e) => setName('align', e.target.value as NameAlign)}
+                      disabled={alignDisabled}
+                      title={
+                        alignDisabled
+                          ? '揃える基準の幅が決まらないため使えません。「位置とサイズ」の「幅 width(px)」を入れるか、読み込める立ち絵画像を設定してください。'
+                          : editing.width == null
+                            ? `幅は画像の実サイズ ${alignBaseWidth}px を使います（画像を差し替えたらCSSを出し直してください）。`
+                            : undefined
+                      }
+                    >
+                      <option value="left">左</option>
+                      <option value="center">中央</option>
+                      <option value="right">右</option>
+                    </select>
+                  </div>
+                  <div className="field">
+                    <label htmlFor="pr-name-outw">
+                      縁取りの幅(px)
+                      {!editing.nameLabel.outline && (
+                        <small className="why">下の「縁取り」を ON にすると使えます</small>
+                      )}
+                    </label>
+                    <input
+                      id="pr-name-outw"
+                      type="number"
+                      min={0}
+                      value={editing.nameLabel.outlineWidth}
+                      disabled={!editing.nameLabel.outline}
+                      onChange={(e) => setName('outlineWidth', Number(e.target.value))}
+                    />
+                  </div>
+                  <div className="field">
+                    <label htmlFor="pr-name-outc">
+                      縁取りの色
+                      {!editing.nameLabel.outline && (
+                        <small className="why">下の「縁取り」を ON にすると使えます</small>
+                      )}
+                    </label>
+                    <input
+                      id="pr-name-outc"
+                      type="color"
+                      value={editing.nameLabel.outlineColor}
+                      disabled={!editing.nameLabel.outline}
+                      onChange={(e) => setName('outlineColor', e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="chips">
+                  <button
+                    type="button"
+                    className="chip"
+                    data-on={editing.nameLabel.bold}
+                    aria-pressed={editing.nameLabel.bold}
+                    onClick={() => setName('bold', !editing.nameLabel.bold)}
+                  >
+                    <span className="dot" />
+                    太字
+                  </button>
+                  <button
+                    type="button"
+                    className="chip"
+                    data-on={editing.nameLabel.outline}
+                    aria-pressed={editing.nameLabel.outline}
+                    onClick={() => setName('outline', !editing.nameLabel.outline)}
+                  >
+                    <span className="dot" />
+                    縁取り
+                  </button>
+                  <button
+                    type="button"
+                    className="chip"
+                    data-on={editing.nameLabel.background}
+                    aria-pressed={editing.nameLabel.background}
+                    onClick={() => setName('background', !editing.nameLabel.background)}
+                  >
+                    <span className="dot" />
+                    背景（テロップ帯）
+                  </button>
+                </div>
+
+                {editing.nameLabel.background && (
+                  <>
+                    <div className="row" style={{ marginTop: 12 }}>
+                      <div className="field">
+                        <label htmlFor="pr-name-bgfit">
+                          帯の幅
+                          {editing.nameLabel.fit === 'stretch' && alignDisabled ? (
+                            <small className="why">
+                              幅の基準が無いため、実際は文字幅に縮みます
+                            </small>
+                          ) : (
+                            <small>文字に合わせるか、立ち絵の幅いっぱいか</small>
+                          )}
+                        </label>
+                        <select
+                          id="pr-name-bgfit"
+                          value={editing.nameLabel.fit}
+                          onChange={(e) => setName('fit', e.target.value as NameFit)}
+                        >
+                          <option value="text">文字に合わせる</option>
+                          <option value="stretch">立ち絵の幅いっぱい</option>
+                        </select>
+                      </div>
+                      <div className="field">
+                        <label htmlFor="pr-name-bgc">帯の色</label>
+                        <input
+                          id="pr-name-bgc"
+                          type="color"
+                          value={editing.nameLabel.backgroundColor}
+                          onChange={(e) => setName('backgroundColor', e.target.value)}
+                        />
+                      </div>
+                      <div className="field">
+                        <label htmlFor="pr-name-bgo">
+                          帯の不透明度(%)
+                          <small>0 で透明・100 でベタ塗り</small>
+                        </label>
+                        <input
+                          id="pr-name-bgo"
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={editing.nameLabel.backgroundOpacity}
+                          onChange={(e) => setName('backgroundOpacity', Number(e.target.value))}
+                        />
+                      </div>
+                      <div className="field">
+                        <label htmlFor="pr-name-bgr">角丸(px)</label>
+                        <input
+                          id="pr-name-bgr"
+                          type="number"
+                          min={0}
+                          value={editing.nameLabel.backgroundRadius}
+                          onChange={(e) => setName('backgroundRadius', Number(e.target.value))}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="row">
+                      <div className="field">
+                        <label htmlFor="pr-name-bgpx">
+                          帯の余白・横(px)
+                          <small>文字の左右にとる余白</small>
+                        </label>
+                        <input
+                          id="pr-name-bgpx"
+                          type="number"
+                          min={0}
+                          value={editing.nameLabel.backgroundPadX}
+                          onChange={(e) => setName('backgroundPadX', Number(e.target.value))}
+                        />
+                      </div>
+                      <div className="field">
+                        <label htmlFor="pr-name-bgpy">
+                          帯の余白・縦(px)
+                          <small>文字の上下にとる余白</small>
+                        </label>
+                        <input
+                          id="pr-name-bgpy"
+                          type="number"
+                          min={0}
+                          value={editing.nameLabel.backgroundPadY}
+                          onChange={(e) => setName('backgroundPadY', Number(e.target.value))}
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                <p className="hint" style={{ marginTop: 10 }}>
+                  名前は <code>body::before</code> で描きます（立ち絵は <code>body::after</code>）。
+                  1 ブラウザソースに出せるのは <b style={{ color: 'var(--text)' }}>立ち絵1枚＋名前1つ</b> です。
+                  発話演出は名前には掛かりません（静止したネームプレート）。
+                </p>
+              </>
+            )}
 
             <div className="subhead">その他</div>
             <label className="toggle" htmlFor="pr-dim">

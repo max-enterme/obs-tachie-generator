@@ -1,4 +1,11 @@
-import { DIM_BRIGHTNESS_PCT, type GenerateOptions, type SpeakEffect, type TachieUser } from './types'
+import {
+  DIM_BRIGHTNESS_PCT,
+  resolveDisplayName,
+  type GenerateOptions,
+  type NameLabel,
+  type SpeakEffect,
+  type TachieUser,
+} from './types'
 
 /**
  * Streamkit 互換の立ち絵カスタムCSSを組み立てる純粋関数群。
@@ -16,6 +23,10 @@ import { DIM_BRIGHTNESS_PCT, type GenerateOptions, type SpeakEffect, type Tachie
  *
  * 「話すときの動き」は 枠(outline) / 点滅(blink) / ぴょこぴょこ(bounce) を個別に on/off。
  * 「静かな人を暗くする」(dimWhenQuiet) は非発話の立ち絵を暗くし、発話中だけ明るく戻す。
+ *
+ * 名前（任意テキスト）は `body::before` の `content` で描く。Streamkit の実要素（`Voice_name__`）は
+ * 潰しているので Discord のアカウント名は出ず、**ここで出す名前だけ**が画面に出る。
+ * → 擬似要素は 立ち絵=`::after` / 名前=`::before` で使い切る（1ソース = 立ち絵1枚 + 名前1つ）。
  */
 
 type Effect = 'jump' | 'light' | 'blink'
@@ -41,6 +52,182 @@ export function safeColor(color: string): string {
   if (/^rgb\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*\)$/i.test(c)) return c
   if (/^rgba\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*(0|1|0?\.\d+)\s*\)$/i.test(c)) return c
   return '#FFFFFF'
+}
+
+/**
+ * 任意テキストを CSS の文字列リテラル（`content` 用）として安全に包む。
+ * `"` `\` をエスケープし、改行・制御文字は空白へ潰す（`content` は複数行を持てない）。
+ */
+export function cssString(text: string): string {
+  const escaped = text
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u001F\u007F]/g, ' ')
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+  return `"${escaped}"`
+}
+
+/**
+ * 改行・制御文字を空白へ潰して1行にする（{@link cssString} と同じ正規化を、囲みとエスケープ抜きで）。
+ * プレビュー側が「出力に載る文字列」と同じ判定をするために使う。
+ */
+export function flattenText(text: string): string {
+  return cssString(text)
+    .slice(1, -1)
+    .replace(/\\(["\\])/g, '$1')
+}
+
+/**
+ * 任意テキストを CSS コメントに入れられる形にする。`*` と `/` の並びを割って、
+ * コメントの早期終了（＝その先が有効な CSS として解釈される）を防ぐ。
+ */
+export function cssComment(text: string): string {
+  return flattenText(text).replace(/\*\//g, '* /')
+}
+
+/** 引用符を付けずに書くジェネリックファミリ（キーワードとして解釈させたいもの）。 */
+const GENERIC_FONT_FAMILIES = new Set([
+  'serif',
+  'sans-serif',
+  'monospace',
+  'cursive',
+  'fantasy',
+  'system-ui',
+  'ui-serif',
+  'ui-sans-serif',
+  'ui-monospace',
+  'ui-rounded',
+  'math',
+  'emoji',
+  'fangsong',
+])
+
+/**
+ * フォント名を安全化する。`;` `{` `}` `(` `)` などを落として CSS 注入を潰したうえで、
+ * **ジェネリック以外は必ず引用符で包む**。
+ *
+ * 無引用の識別子は数字始まりにできず `.` も含められないため、`07やさしさゴシック` のような
+ * 数字始まりの日本語フォント名を無引用で書くと**宣言ごとパーサに捨てられ、黙って効かない**。
+ * 引用すれば任意の文字列をファミリ名として渡せる（`inherit` 等のキーワード誤解釈も同時に防げる）。
+ *
+ * 空になったら `''`（＝ font-family を出さずページのフォントを継承）。
+ */
+export function safeFontFamily(raw: string): string {
+  return raw
+    .replace(/[\u0000-\u001F\u007F]/g, '') // eslint-disable-line no-control-regex
+    .replace(/[^A-Za-z0-9 ,._\-\u0080-\uFFFF]/g, '')
+    .split(',')
+    .map((part) => part.replace(/\s+/g, ' ').trim())
+    .filter((part) => part !== '')
+    .map((part) => (GENERIC_FONT_FAMILIES.has(part.toLowerCase()) ? part : cssString(part)))
+    .join(', ')
+}
+
+/**
+ * 色＋不透明度(%) を CSS カラーにする。`#rgb` / `#rrggbb` は `rgba()` に展開し、
+ * それ以外（`rgb()` / `rgba()` / `#rrggbbaa`）は不透明度を無視してそのまま使う。
+ */
+export function cssColorWithOpacity(color: string, opacityPct: number): string {
+  const c = safeColor(color)
+  const a = Math.min(100, Math.max(0, opacityPct)) / 100
+  const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(c)
+  if (!m) return c
+  const hex = m[1].length === 3 ? m[1].replace(/(.)/g, '$1$1') : m[1]
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16))
+  return `rgba(${r}, ${g}, ${b}, ${Number(a.toFixed(2))})`
+}
+
+/** 文字の縁取り（8方向の text-shadow）。 */
+function textOutline(color: string, width: number): string {
+  const c = safeColor(color)
+  const w = width > 0 ? width : 1
+  const offsets: Array<[number, number]> = [
+    [w, 0],
+    [-w, 0],
+    [0, w],
+    [0, -w],
+    [w, w],
+    [w, -w],
+    [-w, w],
+    [-w, -w],
+  ]
+  return offsets.map(([x, y]) => `${x}px ${y}px 0 ${c}`).join(', ')
+}
+
+/**
+ * 名前ラベル `body::before` のブロック。名前が空、または `show` が false なら `null`（＝出力しない）。
+ * 位置は立ち絵の `left`/`bottom` にオフセットを足して数値で出す（貼った後に人が読んで直せるように）。
+ */
+function nameBlock(user: TachieUser, options: GenerateOptions): string | null {
+  const label: NameLabel = options.nameLabel
+  const text = resolveDisplayName(user)
+  if (!label.show || text === '') return null
+
+  const { left, bottom, width, hideWhenAway, imageNaturalWidth } = options
+  const font = safeFontFamily(label.fontFamily)
+  // 行揃えには箱の幅が要る。幅指定があればそれ、原寸ならアプリ側で測った実サイズを使う。
+  // 幅 0 以下は「箱が無い」と同じなので基準に採らない。
+  const explicitWidth = width != null && width > 0 ? width : undefined
+  const measured =
+    explicitWidth == null && imageNaturalWidth != null && imageNaturalWidth > 0
+  const boxWidth = explicitWidth ?? (measured ? imageNaturalWidth : undefined)
+  // 背景（テロップ帯）を「文字幅」に合わせるモード。帯を縮めるため width を出さず、
+  // 立ち絵に対する位置合わせは transform でアンカーする（幅が分からなくても左寄せなら成立）。
+  const hug = label.background && label.fit === 'text'
+  const anchor = hug && boxWidth != null ? label.align : 'left'
+  const w = boxWidth ?? 0
+  const anchorShift = anchor === 'center' ? w / 2 : anchor === 'right' ? w : 0
+  const leftPx = Math.round((left + label.offsetX + anchorShift) * 100) / 100
+  const transform =
+    anchor === 'center' ? 'translateX(-50%)' : anchor === 'right' ? 'translateX(-100%)' : null
+  const pad = label.background && (label.backgroundPadX > 0 || label.backgroundPadY > 0)
+
+  const decls = [
+    `  content: ${cssString(text)};`,
+    `  position: fixed;`,
+    `  left: ${leftPx}px;`,
+    `  bottom: ${Math.round((bottom + label.offsetY) * 100) / 100}px;`,
+    // 立ち絵（::after）は ::before より後に描かれるので、重ねたときは名前を前面に出す。
+    `  z-index: 1;`,
+    `  display: ${hideWhenAway ? 'none' : 'block'};`,
+    // 行揃えは幅がないと意味を持たない（幅なしの ::before は文字幅ぴったりに縮む）。
+    ...(!hug && boxWidth != null
+      ? [`  width: ${boxWidth}px;`, `  text-align: ${label.align};`]
+      : []),
+    ...(transform ? [`  transform: ${transform};`] : []),
+    // 背景（テロップ帯）
+    ...(label.background
+      ? [
+          `  background: ${cssColorWithOpacity(label.backgroundColor, label.backgroundOpacity)};`,
+          ...(pad ? [`  padding: ${label.backgroundPadY}px ${label.backgroundPadX}px;`] : []),
+          ...(label.backgroundRadius > 0
+            ? [`  border-radius: ${label.backgroundRadius}px;`]
+            : []),
+          // 余白を足しても指定幅からはみ出さないようにする（Streamkit 側の既定に依存しない）。
+          ...(pad && !hug && boxWidth != null ? [`  box-sizing: border-box;`] : []),
+        ]
+      : []),
+    ...(font ? [`  font-family: ${font};`] : []),
+    // 0 以下は名前が消えるだけなので 1px に丸める（入力欄を空にすると 0 が入る）。
+    `  font-size: ${Math.max(1, label.fontSize)}px;`,
+    `  font-weight: ${label.bold ? 700 : 400};`,
+    `  color: ${safeColor(label.color)};`,
+    // 幅 0 の縁取りは出さない（ON のまま太さ 0 にしたら消える、が素直）。
+    ...(label.outline && label.outlineWidth > 0
+      ? [`  text-shadow: ${textOutline(label.outlineColor, label.outlineWidth)};`]
+      : []),
+    `  line-height: 1.2;`,
+    `  white-space: pre;`,
+    `  pointer-events: none;`,
+  ]
+  // 実測幅を実際に使ったときだけ注記を出す（左寄せの帯など、使っていないなら黙る）。
+  const usesBoxWidth = boxWidth != null && (!hug || anchor !== 'left')
+  const header =
+    measured && usesBoxWidth
+      ? `/* 名前（任意テキスト。Streamkit の名前は隠し、これだけを出す）
+   位置合わせの基準幅 ${boxWidth}px は立ち絵画像の実サイズ。**画像を差し替えたらCSSを出し直すこと**。 */`
+      : `/* 名前（任意テキスト。Streamkit の名前は隠し、これだけを出す） */`
+  return `${header}\nbody::before {\n${decls.join('\n')}\n}`
 }
 
 const KEYFRAMES_JUMP_TRANSFORM = (jumpPx: number) => `@keyframes speak-jump {
@@ -94,7 +281,8 @@ function animationValue(effects: Effect[], durationMs: number): string {
 function rootBlock(users: TachieUser[]): string {
   const lines = users.flatMap((u) => {
     const id = safeId(u.id)
-    const label = u.name ? `  /* ${u.name} (${id}) */` : `  /* ${id} */`
+    // メモ名は素通しするとコメントを閉じて任意CSSを差し込めてしまう（cssComment で潰す）。
+    const label = u.name ? `  /* ${cssComment(u.name)} (${id}) */` : `  /* ${id} */`
     return [label, `  --img-stand-url-${id}: ${cssUrl(u.imageUrl)};`]
   })
   return `:root {\n${lines.join('\n')}\n}`
@@ -147,6 +335,10 @@ export function generateStandaloneCss(user: TachieUser, options: GenerateOptions
     `/* 立ち絵（常時表示：通話に居ても居なくても同じ位置） */\nbody::after {\n${afterDecls.join('\n')}\n}`,
   ]
 
+  // 名前（任意テキスト）。表示ON かつ名前が空でないときだけ body::before を足す。
+  const nameCss = nameBlock(user, options)
+  if (nameCss) parts.push(nameCss)
+
   // 発話中のルール：演出があるか、暗転解除（dim）が要るなら出す
   if (effects.length > 0 || dimWhenQuiet) {
     const speakingDecls: string[] = []
@@ -168,9 +360,14 @@ ${speakingDecls.join('\n')}
   // 通話にいないときは隠す：本人が接続中は実 img が DOM に出る（display:none でも :has() は一致）。
   // それを検知して、在室（通話中）のときだけ立ち絵を表示する。→ 通話にいない時は非表示。
   if (hideWhenAway) {
+    // 名前も立ち絵と一緒に出入りさせる（::before を先に書く＝::after 側の形は従来どおり）。
+    const selectors = [
+      ...(nameCss ? [`body:has(img[src*="avatars/${id}"])::before`] : []),
+      `body:has(img[src*="avatars/${id}"])::after`,
+    ]
     parts.push(
-      `/* 通話にいないときは隠す：在室（本人が接続中）のときだけ立ち絵を表示 */
-body:has(img[src*="avatars/${id}"])::after {
+      `/* 通話にいないときは隠す：在室（本人が接続中）のときだけ立ち絵${nameCss ? '・名前' : ''}を表示 */
+${selectors.join(',\n')} {
   display: block;
 }`,
     )
@@ -178,7 +375,11 @@ body:has(img[src*="avatars/${id}"])::after {
 
   parts.push(
     `img {\n  display: none !important;\n}`,
-    `[class*="Voice_name__"], [class*="Voice_user__"] {\n  display: none !important;\n}`,
+    // 名前を出すときだけ「アカウント名を隠している」ことを注記する
+    // （名前OFFのときの出力は 001 と同一に保つ）。
+    `${
+      nameCss ? '/* Streamkit のアカウント名は隠す（名前は上のブロックで出す） */\n' : ''
+    }[class*="Voice_name__"], [class*="Voice_user__"] {\n  display: none !important;\n}`,
     ...keyframeBlocks(effects, speak, 'transform'),
   )
 
@@ -229,7 +430,7 @@ export function generateCombinedCss(users: TachieUser[], options: GenerateOption
       `  border-radius: 0;`,
       `  border: none;`,
     ]
-    const label = u.name ? `/* ${u.name} */\n` : ''
+    const label = u.name ? `/* ${cssComment(u.name)} */\n` : ''
     parts.push(`${label}img[src*="avatars/${id}"] {\n${decls.join('\n')}\n}`)
   }
 
