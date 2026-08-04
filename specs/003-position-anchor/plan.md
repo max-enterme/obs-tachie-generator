@@ -24,6 +24,25 @@ test: npm run typecheck && npm run lint && npx vitest run
 - **`transform` の一元管理**を入れる。中央寄せの `translate` と発話演出の `translateY` を別々に書くと後勝ちで壊れるため、
   「中央寄せ分の translate」を返す小さな純粋関数を作り、`body::after` の静止時 `transform` と
   `@keyframes speak-jump` の**両方が同じ関数の結果を前置**する形にする(spec の案1)。
+  **`transform` を出す箇所は3つある**(002 マージ後の実測): ①立ち絵の静止時 ②`@keyframes speak-jump`
+  ③名前ラベル `body::before` の帯アンカー(`translateX(-50%)` / `translateX(-100%)`,
+  [`generateCss.ts:181`](../../src/lib/generateCss.ts))。**この3つを1つの合成関数に通す**のが不変条件。
+
+### 名前ラベル(002)のアンカー追従
+- 現状の `nameBlock` は `left: <立ち絵のleft + offsetX + 帯補正>px` / `bottom: <立ち絵のbottom + offsetY>px` を
+  数値で焼く([`generateCss.ts:180`](../../src/lib/generateCss.ts))。**左下基準の座標系に固定**されている。
+- 立ち絵の位置生成を `positionDecls(options)` に切り出すとき、**名前ラベルも同じ関数を通す**。
+  名前側は「立ち絵の位置 + オフセット」なので、`positionDecls` を
+  **「アンカー + オフセット量 → 位置宣言 + transform 断片」を返す形**にしておけば両方から呼べる。
+
+  | anchorX | 立ち絵 | 名前(オフセット `dx`) |
+  |---|---|---|
+  | `left` | `left: X px` | `left: (X + dx) px` |
+  | `right` | `right: X px` | `right: (X − dx) px` ※ dx の符号が反転する |
+  | `center` | `left: 50%` + `translateX(-50%)` | `left: 50%` + `translateX(calc(-50% + dx px))` |
+
+  **右アンカーでオフセットの符号が反転する**のが事故りやすい箇所。「名前を立ち絵より右にずらす」は
+  右アンカーでは `right` を減らす方向になる。ここは vitest で固定する。
 
 ### クロップ
 - **CSS には一切出さない。** 取り込み済み画像を canvas で切り抜き、結果の data URI で `Preset.imageUrl` を
@@ -49,7 +68,7 @@ test: npm run typecheck && npm run lint && npx vitest run
 | 層 | 変更 |
 |---|---|
 | `src/lib/types.ts` | `GenerateOptions` / `Preset` に `anchorX` / `anchorY`(任意)。`DEFAULT_OPTIONS` は `left`/`bottom`。`presetToOptions` で受け渡し |
-| `src/lib/generateCss.ts` | 位置宣言の生成を関数に切り出し(`positionDecls(options)`)。`KEYFRAMES_JUMP_TRANSFORM` を「中央寄せ translate を前置する」形に変更。`generateCombinedCss` は型の整合のみ(挙動は据え置き) |
+| `src/lib/generateCss.ts` | 位置宣言の生成を関数に切り出し(`positionDecls`)。`KEYFRAMES_JUMP_TRANSFORM` を「中央寄せ translate を前置する」形に変更。**`nameBlock` の `left`/`bottom` 直書きを `positionDecls` 経由に置換し、帯の `transform` と中央寄せ分を合成**。`generateCombinedCss` は型の整合のみ(挙動は据え置き) |
 | `src/lib/state.ts` | 保存済み `Preset` 読み込み時に `anchorX`/`anchorY` 欠損を既定値で補完(マイグレーション) |
 | `src/ui/PresetPanel.tsx` | 「位置とサイズ」に 3×3 のアンカー選択を追加。オフセットのラベルをアンカーに追従(「左端からの距離」⇄「右端からの距離」)。画像ブロックにクロップUI(余白を詰める / 範囲指定)とクロップ後寸法の表示 |
 | `src/ui/TachiePreview.tsx` | プレビューの配置をアンカーに追従。クロップは `imageUrl` が差し替わるだけなので**追加対応なし** |
@@ -58,14 +77,19 @@ test: npm run typecheck && npm run lint && npx vitest run
 | `src/lib/generateCss.test.ts` | 9通り × 発話演出のスナップショット的アサーション。既存(左下)の出力が**変わらない**ことを固定 |
 
 ## 依存 / 前提
-- **002(custom-name-display)のマージ待ち。** 同じ4ファイルを触るため、先に 002 を入れる。
-  002 の名前ラベルは「立ち絵からの相対位置」なので、立ち絵アンカーの変更に自動で追従する想定
-  (追従しない実装だったら 003 側で吸収する)。
+- **002(custom-name-display)は 2026-08-05 にマージ済み**(PR #21 / main `344cb06`)。着手可。
+  当初「名前は立ち絵アンカーに自動追従する想定(追従しなければ 003 側で吸収する)」と書いたが、
+  **実装を確認したところ追従しない**ため、**吸収する側に確定**した(上記「名前ラベルのアンカー追従」)。
+- 002 で `generateCss.ts` +213行 / `PresetPanel.tsx` +325行 / `TachiePreview.tsx` +134行 と
+  大きく変わっている。**この plan の変更点は着手時に実物と突き合わせる**。
+- 002 は名前OFF出力のゴールデンテストを持つ。**それを壊さないことが 003 の回帰ラインになる**。
 - 保存形式は localStorage。破壊的変更は不可。
 
 ## リスク / 降りる箇所
-- **`transform` 衝突**(spec 参照)。案1(keyframes に織り込む)で進めるが、`light`(枠・後光)や `blink` が
-  `transform` を使い始めたら同じ問題が再発する。**「transform を触る演出は必ず中央寄せ分を前置する」**を
+- **`transform` 衝突**(spec 参照)。案1(keyframes に織り込む)で進める。
+  **「`light`(枠・後光)や `blink` が transform を使い始めたら再発する」と書いていたが、002 の名前ラベルが
+  すでに `transform` を使い始めたので、再発条件は満たされている。** 対象は立ち絵の静止時 /
+  `speak-jump` / 名前ラベルの3箇所。**「transform を出す箇所は必ず合成関数を通す」**を
   コード側の不変条件として明示する(コメント + テスト)。
 - **既存出力のバイト一致**。左下アンカー時に空白や宣言順が変わると回帰テストが落ちる。
   位置宣言の生成を切り出すときに順序を保つこと。
