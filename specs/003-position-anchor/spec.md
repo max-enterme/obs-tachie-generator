@@ -3,7 +3,7 @@ feature: position-anchor
 issue: 11
 release: r3
 priority: must
-status: 未着手
+status: レビュー
 ---
 
 # 立ち絵の基準位置(アンカー)を9通りから選ぶ ＋ 画像クロップ

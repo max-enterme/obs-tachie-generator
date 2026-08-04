@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { normalizeState } from './state'
 import { cssFilename } from './download'
-import { DEFAULT_NAME_LABEL, DEFAULT_OPTIONS, DEFAULT_SPEAK } from './types'
+import {
+  DEFAULT_ANCHOR_X,
+  DEFAULT_ANCHOR_Y,
+  DEFAULT_NAME_LABEL,
+  DEFAULT_OPTIONS,
+  DEFAULT_SPEAK,
+} from './types'
 
 const EMPTY = { users: [], presets: [], pairings: [], selection: { userId: null, presetId: null } }
 
@@ -93,6 +99,64 @@ describe('normalizeState', () => {
     expect(s.presets[0].width).toBeUndefined()
     expect(s.presets[1].width).toBeUndefined()
     expect(s.presets[2].width).toBe(480)
+  })
+
+  it('アンカーが無い旧プリセットは既定（左下）で補完する', () => {
+    const s = normalizeState({
+      users: [],
+      presets: [{ id: 'p1', left: 16, bottom: 16 }],
+    })
+    expect(s.presets[0].anchorX).toBe(DEFAULT_ANCHOR_X)
+    expect(s.presets[0].anchorY).toBe(DEFAULT_ANCHOR_Y)
+    expect(DEFAULT_ANCHOR_X).toBe('left')
+    expect(DEFAULT_ANCHOR_Y).toBe('bottom')
+  })
+
+  it('不正なアンカー（別軸の値 / 数値 / null）は既定（左下）に倒す', () => {
+    const s = normalizeState({
+      users: [],
+      presets: [
+        { id: 'p1', anchorX: 'middle', anchorY: 'center' }, // 軸の取り違え
+        { id: 'p2', anchorX: 0, anchorY: 1 },
+        { id: 'p3', anchorX: null, anchorY: null },
+        { id: 'p4', anchorX: 'LEFT', anchorY: 'BOTTOM' },
+      ],
+    })
+    for (const p of s.presets) {
+      expect(p.anchorX).toBe(DEFAULT_ANCHOR_X)
+      expect(p.anchorY).toBe(DEFAULT_ANCHOR_Y)
+    }
+  })
+
+  it('正しいアンカーはそのまま保持する', () => {
+    const s = normalizeState({
+      users: [],
+      presets: [
+        { id: 'p1', anchorX: 'right', anchorY: 'top' },
+        { id: 'p2', anchorX: 'center', anchorY: 'middle' },
+        { id: 'p3', anchorX: 'left', anchorY: 'bottom' },
+      ],
+    })
+    expect(s.presets[0].anchorX).toBe('right')
+    expect(s.presets[0].anchorY).toBe('top')
+    expect(s.presets[1].anchorX).toBe('center')
+    expect(s.presets[1].anchorY).toBe('middle')
+    expect(s.presets[2].anchorX).toBe('left')
+    expect(s.presets[2].anchorY).toBe('bottom')
+  })
+
+  it('片方だけ指定されたアンカーは、指定側を保持して他方だけ既定に倒す', () => {
+    const s = normalizeState({
+      users: [],
+      presets: [
+        { id: 'p1', anchorX: 'right' },
+        { id: 'p2', anchorY: 'middle' },
+      ],
+    })
+    expect(s.presets[0].anchorX).toBe('right')
+    expect(s.presets[0].anchorY).toBe(DEFAULT_ANCHOR_Y)
+    expect(s.presets[1].anchorX).toBe(DEFAULT_ANCHOR_X)
+    expect(s.presets[1].anchorY).toBe('middle')
   })
 
   it('nameLabel が壊れていても（null / 配列 / 文字列）既定で補完する', () => {
