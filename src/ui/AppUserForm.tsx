@@ -12,6 +12,7 @@ interface Props {
 export default function AppUserForm({ onAdd }: Props) {
   const [id, setId] = useState('')
   const [name, setName] = useState('')
+  const [displayName, setDisplayName] = useState('')
   const [error, setError] = useState('')
 
   function submit() {
@@ -21,9 +22,10 @@ export default function AppUserForm({ onAdd }: Props) {
       setError('Discord ユーザーID（数字）を入力してください。')
       return
     }
-    onAdd({ id: cleanId, name: name.trim() })
+    onAdd({ id: cleanId, name: name.trim(), displayName: displayName.trim() })
     setId('')
     setName('')
+    setDisplayName('')
   }
 
   return (
@@ -51,11 +53,25 @@ export default function AppUserForm({ onAdd }: Props) {
             onChange={(e) => setName(e.target.value)}
           />
         </div>
+        <div className="field">
+          <label htmlFor="uf-display">画面に出す名前（任意）</label>
+          <input
+            id="uf-display"
+            type="text"
+            placeholder="空ならメモ用の表示名を使う"
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+          />
+        </div>
       </div>
 
       <p className="hint" style={{ marginTop: 0 }}>
         開発者モード → ユーザー右クリック →「IDをコピー」。ここでは <b style={{ color: 'var(--text)' }}>
         誰か</b>だけを登録します（立ち絵はステップ②のプリセットで）。
+        <br />
+        <b style={{ color: 'var(--text)' }}>画面に出す名前</b>は OBS に出る文字そのものです（Discord
+        のアカウント名とは無関係・任意の文字列）。実際に出すかどうかはステップ②の
+        「名前表示」で切り替えます。
       </p>
 
       {error && (

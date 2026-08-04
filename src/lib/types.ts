@@ -4,6 +4,8 @@ export interface TachieUser {
   id: string
   /** 表示名。生成CSSにはコメントとしてだけ入る（画面には出ない）。 */
   name: string
+  /** 画面に出す任意の名前。空なら {@link TachieUser.name} を流用する。 */
+  displayName?: string
   /**
    * 立ち絵画像。`data:image/...;base64,...` の data URI を推奨（外部ホスト不要・CSP回避・失効なし）。
    * 外部URLも指定できるが、Streamkit の CSP に阻まれるホストは表示されない。
@@ -32,6 +34,60 @@ export interface SpeakEffect {
   durationMs: number
 }
 
+/** 名前ラベルの行揃え。立ち絵に `width` 指定があるときだけ意味を持つ。 */
+export type NameAlign = 'left' | 'center' | 'right'
+
+/**
+ * 名前の背景（テロップ帯）の幅の決め方。
+ * - `text`: 文字幅に合わせて帯が縮む（テロップらしい見た目）。行揃えは帯ごとの位置合わせになる。
+ * - `stretch`: 立ち絵の幅いっぱいに帯を敷く（帯の中で文字を行揃え）。
+ */
+export type NameFit = 'text' | 'stretch'
+
+/**
+ * 立ち絵に添える「任意の名前」の見た目。**テキストそのものは持たない**
+ * （テキストは「誰」= {@link AppUser.displayName} 側。見た目は複数人で使い回す）。
+ * 出力は `body::before` の `content` 1要素 ＝ **1ソースにつき名前は1つ**。
+ */
+export interface NameLabel {
+  /** 名前を表示するか。 */
+  show: boolean
+  /** 立ち絵の左端からの相対位置(px)。 */
+  offsetX: number
+  /** 立ち絵の下端からの相対位置(px)。負で立ち絵より下。 */
+  offsetY: number
+  /** 文字サイズ(px)。 */
+  fontSize: number
+  /** フォント名（空で Streamkit ページのフォントを継承）。OBS(CEF) にあるものだけ効く。 */
+  fontFamily: string
+  /** 文字色（CSS カラー。既定 `#FFFFFF`）。 */
+  color: string
+  /** 太字にするか。 */
+  bold: boolean
+  /** 行揃え（立ち絵に `width` 指定があるときだけ効く）。 */
+  align: NameAlign
+  /** 縁取り（text-shadow のフチ）を出すか。 */
+  outline: boolean
+  /** 縁取りの色（CSS カラー。既定 `#000000`）。 */
+  outlineColor: string
+  /** 縁取りの幅(px)。 */
+  outlineWidth: number
+  /** 背景（テロップ帯）を敷くか。 */
+  background: boolean
+  /** 背景色（CSS カラー。既定 `#000000`）。 */
+  backgroundColor: string
+  /** 背景の不透明度(%)。0–100。 */
+  backgroundOpacity: number
+  /** 背景の内側余白・横(px)。 */
+  backgroundPadX: number
+  /** 背景の内側余白・縦(px)。 */
+  backgroundPadY: number
+  /** 背景の角丸(px)。 */
+  backgroundRadius: number
+  /** 背景の幅の決め方（背景ONのときだけ効く）。 */
+  fit: NameFit
+}
+
 /** `generateCss` の生成オプション。 */
 export interface GenerateOptions {
   /**
@@ -51,6 +107,14 @@ export interface GenerateOptions {
   hideWhenAway: boolean
   /** 発話演出。 */
   speak: SpeakEffect
+  /** 名前ラベルの見た目。テキストは {@link TachieUser.displayName} / {@link TachieUser.name} 側。 */
+  nameLabel: NameLabel
+  /**
+   * 立ち絵画像の実サイズ（幅 px）。`width` が未指定（原寸）のときに、名前ラベルの行揃え用の
+   * 箱幅として使う（CSS からは描画中の画像の実寸を参照できないため、アプリ側で測って焼き込む）。
+   * 立ち絵自体の描画には使わない（原寸のまま）。
+   */
+  imageNaturalWidth?: number
 }
 
 /** 「静かな人を暗くする」で非発話時に掛ける明るさ(%)。 */
@@ -65,6 +129,8 @@ export interface AppUser {
   id: string
   /** 表示名（メモ用）。 */
   name: string
+  /** 画面に出す任意の名前。空（未設定）なら {@link AppUser.name} を流用する。 */
+  displayName?: string
 }
 
 /**
@@ -90,6 +156,8 @@ export interface Preset {
   hideWhenAway: boolean
   /** 発話演出。 */
   speak: SpeakEffect
+  /** 名前ラベルの見た目（テキストはユーザー側）。 */
+  nameLabel: NameLabel
 }
 
 /** 出力する「ユーザー × プリセット」の明示ペア（多対多）。保存リストの1件。 */
@@ -122,8 +190,11 @@ export interface AppState {
   selection: Selection
 }
 
-/** プリセットを generateCss の {@link GenerateOptions} に落とす（常に個別＝常時表示）。 */
-export function presetToOptions(p: Preset): GenerateOptions {
+/**
+ * プリセットを generateCss の {@link GenerateOptions} に落とす（常に個別＝常時表示）。
+ * `imageNaturalWidth` は幅が原寸のときの名前ラベル用（測れていなければ省略可）。
+ */
+export function presetToOptions(p: Preset, imageNaturalWidth?: number): GenerateOptions {
   return {
     alwaysShow: true,
     left: p.left,
@@ -132,12 +203,19 @@ export function presetToOptions(p: Preset): GenerateOptions {
     dimWhenQuiet: p.dimWhenQuiet,
     hideWhenAway: p.hideWhenAway,
     speak: p.speak,
+    nameLabel: p.nameLabel,
+    imageNaturalWidth,
   }
 }
 
 /** ユーザー（誰）とプリセット（見た目）を合成して generateCss の描画入力 {@link TachieUser} を作る。 */
 export function renderUser(u: AppUser, p: Preset): TachieUser {
-  return { id: u.id, name: u.name, imageUrl: p.imageUrl }
+  return { id: u.id, name: u.name, displayName: u.displayName, imageUrl: p.imageUrl }
+}
+
+/** 画面に出す名前を決める（`displayName` 優先・空ならメモ用の `name`）。空文字なら名前を出さない。 */
+export function resolveDisplayName(u: Pick<TachieUser, 'name' | 'displayName'>): string {
+  return (u.displayName ?? '').trim() || u.name.trim()
 }
 
 /** 既定値（DEFAULT_OPTIONS の位置/サイズ/演出＋空 image・空 name）の新規プリセット。 */
@@ -152,6 +230,7 @@ export function makeDefaultPreset(id: string): Preset {
     dimWhenQuiet: DEFAULT_OPTIONS.dimWhenQuiet,
     hideWhenAway: DEFAULT_OPTIONS.hideWhenAway,
     speak: { ...DEFAULT_SPEAK },
+    nameLabel: { ...DEFAULT_NAME_LABEL },
   }
 }
 
@@ -168,6 +247,31 @@ export function newId(): string {
   const c = globalThis.crypto
   if (c && typeof c.randomUUID === 'function') return c.randomUUID()
   return 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2)
+}
+
+/**
+ * 既定の名前ラベル。**既定は非表示**（001 までの出力と同じ CSS を保つ）。
+ * 位置は「立ち絵の左端・下端から少し下」＝ 足元のネームプレート。
+ */
+export const DEFAULT_NAME_LABEL: NameLabel = {
+  show: false,
+  offsetX: 0,
+  offsetY: -8,
+  fontSize: 32,
+  fontFamily: '',
+  color: '#FFFFFF',
+  bold: true,
+  align: 'center',
+  outline: true,
+  outlineColor: '#000000',
+  outlineWidth: 3,
+  background: false,
+  backgroundColor: '#000000',
+  backgroundOpacity: 60,
+  backgroundPadX: 12,
+  backgroundPadY: 6,
+  backgroundRadius: 6,
+  fit: 'text',
 }
 
 /** 既定の演出。 */
@@ -190,4 +294,5 @@ export const DEFAULT_OPTIONS: GenerateOptions = {
   dimWhenQuiet: false,
   hideWhenAway: false,
   speak: DEFAULT_SPEAK,
+  nameLabel: DEFAULT_NAME_LABEL,
 }

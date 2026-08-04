@@ -16,6 +16,10 @@
   --ok: #23a55a;
   --warn: #f0b232;
   --input-bg: #1e1f22;
+  /* 入力コントロールの共通高さ（text / number / select / color を揃える）。
+     自然高（line-height 1.6 × 16px + padding 16 + border 2 = 43.6px）より小さくすると
+     文字が潰れるので、それ以上を採る。 */
+  --control-h: 44px;
   color-scheme: dark;
 }
 
@@ -325,6 +329,17 @@ code {
 
 .row .field {
   flex: 1 1 120px;
+  /* ラベルの行数が違っても入力欄の高さを揃える（行内で下端＝入力欄を基準に整列） */
+  justify-content: flex-end;
+}
+
+/* ラベル内の補足行。行揃えを崩さないよう、常にブロックで同じ体裁にする */
+.field > label small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.74rem;
+  line-height: 1.35;
+  font-weight: 400;
 }
 
 input[type='text'],
@@ -338,6 +353,28 @@ select {
   padding: 8px 10px;
   font: inherit;
   width: 100%;
+  /* 種類ごとの既定高さの差（text / select / color）を潰して行内で揃える */
+  height: var(--control-h);
+}
+
+/* 無効なコントロールは「今は触れない」と一目で分かるようにする */
+input:disabled,
+select:disabled,
+textarea:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  background: var(--panel-2);
+}
+
+/* 無効な入力を含むフィールドはラベルも一緒に落とす
+   （opacity ではなく色で落とす。中の「理由」だけは目立たせたいため） */
+.field:has(> :disabled) > label {
+  color: color-mix(in srgb, var(--muted) 60%, transparent);
+}
+
+/* 無効の理由（なぜ触れないか・どうすれば触れるか） */
+.field > label small.why {
+  color: var(--warn);
 }
 
 input:focus,
@@ -353,7 +390,7 @@ input[type='file'] {
 
 input[type='color'] {
   width: 100%;
-  height: 38px;
+  height: var(--control-h);
   padding: 2px;
   background: var(--panel-2);
   border: 1px solid var(--line);
@@ -697,6 +734,11 @@ button:disabled {
   min-width: 0;
 }
 
+/* 一覧の中の入力欄（画面に出す名前）は行の高さを揃えるため下マージンを消す */
+.user-item .field {
+  margin-bottom: 0;
+}
+
 .user-item .meta .name {
   font-weight: 600;
 }
@@ -880,6 +922,8 @@ textarea.css-out {
   position: relative;
   width: 100%;
   aspect-ratio: 16 / 9;
+  /* 名前の文字サイズを 1920 基準で比例させるためのコンテナ（cqw を使う） */
+  container-type: inline-size;
   border: 1px solid var(--line);
   border-radius: 8px;
   overflow: hidden;
@@ -893,23 +937,25 @@ textarea.css-out {
   background-position: 0 0, 0 12px, 12px -12px, -12px 0;
 }
 
-.tp-row {
+/* 立ち絵・名前ともビューポート基準の絶対配置（% が同じ基準で解決されるようにする） */
+.tp-img,
+.tp-placeholder {
   position: absolute;
-  left: 0;
-  bottom: 0;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: flex-end;
-  justify-content: flex-start;
-  gap: 2%;
 }
 
 .tp-img {
   display: block;
   height: auto;
   object-fit: contain;
-  flex: 0 0 auto;
+}
+
+/* 名前ラベル（出力の body::before に対応・立ち絵より前面） */
+.tp-name {
+  position: absolute;
+  z-index: 1;
+  line-height: 1.2;
+  white-space: pre;
+  pointer-events: none;
 }
 
 @keyframes tachie-preview-jump {

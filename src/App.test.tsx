@@ -77,6 +77,77 @@ describe('App', () => {
     expect(textarea.value).toContain('data:image/png;base64,ZZZZ')
   })
 
+  it('「画面に出す名前」＋プリセットの名前表示ONで、出力CSSに body::before が出る', async () => {
+    render(<App />)
+
+    // ① ユーザー（メモ名とは別の「画面に出す名前」を入れる）
+    fireEvent.change(screen.getByLabelText('Discord ユーザーID'), {
+      target: { value: '123456789012345678' },
+    })
+    fireEvent.change(screen.getByLabelText(/表示名/), { target: { value: 'ユーザーA' } })
+    fireEvent.change(screen.getByLabelText('画面に出す名前（任意）'), {
+      target: { value: '画面名A' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '追加' }))
+
+    // ② プリセット＋画像 → 名前表示ON
+    await addPresetWithImage('data:image/png;base64,AAAA')
+    fireEvent.click(screen.getByLabelText(/名前を表示する/))
+    fireEvent.change(screen.getByLabelText(/文字サイズ/), { target: { value: '48' } })
+
+    // ③ 出力に反映される
+    fireEvent.click(screen.getByRole('button', { name: /次へ/ }))
+    const out = screen.getByRole('heading', { name: /出力 CSS/ }).closest('.panel')!
+    const textarea = within(out as HTMLElement).getByRole<HTMLTextAreaElement>('textbox')
+    expect(textarea.value).toContain('body::before {')
+    expect(textarea.value).toContain('content: "画面名A";')
+    expect(textarea.value).toContain('font-size: 48px;')
+  })
+
+  it('登録済みユーザーの「画面に出す名前」を一覧で後から変えられる', async () => {
+    render(<App />)
+
+    fireEvent.change(screen.getByLabelText('Discord ユーザーID'), {
+      target: { value: '123456789012345678' },
+    })
+    fireEvent.change(screen.getByLabelText(/表示名/), { target: { value: 'ユーザーA' } })
+    fireEvent.click(screen.getByRole('button', { name: '追加' }))
+
+    const edit = await screen.findByLabelText('画面に出す名前')
+    fireEvent.change(edit, { target: { value: '画面名B' } })
+
+    await addPresetWithImage('data:image/png;base64,AAAA')
+    fireEvent.click(screen.getByLabelText(/名前を表示する/))
+    fireEvent.click(screen.getByRole('button', { name: /次へ/ }))
+
+    const out = screen.getByRole('heading', { name: /出力 CSS/ }).closest('.panel')!
+    const textarea = within(out as HTMLElement).getByRole<HTMLTextAreaElement>('textbox')
+    expect(textarea.value).toContain('content: "画面名B";')
+  })
+
+  it('名前が空なら、③のプレビューに仮名を出さず「出力に入らない」と警告する', async () => {
+    render(<App />)
+
+    // ① ID だけ登録（表示名も画面に出す名前も空）
+    fireEvent.change(screen.getByLabelText('Discord ユーザーID'), {
+      target: { value: '123456789012345678' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '追加' }))
+
+    // ② 名前表示ON（このステップでは仮名で見え方を確認できる）
+    await addPresetWithImage('data:image/png;base64,AAAA')
+    fireEvent.click(screen.getByLabelText(/名前を表示する/))
+    expect(screen.getByText('名前')).toBeInTheDocument()
+
+    // ③ 出力に名前は入らない。プレビューにも仮名を出さず、理由を出す
+    fireEvent.click(screen.getByRole('button', { name: /次へ/ }))
+    const out = screen.getByRole('heading', { name: /出力 CSS/ }).closest('.panel')!
+    const textarea = within(out as HTMLElement).getByRole<HTMLTextAreaElement>('textbox')
+    expect(textarea.value).not.toContain('body::before')
+    expect(screen.getByText(/「画面に出す名前」が空のため/)).toBeInTheDocument()
+    expect(screen.queryByText('名前')).not.toBeInTheDocument()
+  })
+
   it('「保存」で作業中の組が保存リストに出る', async () => {
     render(<App />)
 
