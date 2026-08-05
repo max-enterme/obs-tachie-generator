@@ -88,6 +88,46 @@ export interface NameLabel {
   fit: NameFit
 }
 
+/**
+ * 立ち絵を置く横方向の基準点（アンカー）。
+ * `left` はキャンバス左端 / `right` は右端 / `center` は横中央。
+ */
+export type AnchorX = 'left' | 'center' | 'right'
+
+/**
+ * 立ち絵を置く縦方向の基準点（アンカー）。
+ * `top` はキャンバス上端 / `bottom` は下端 / `middle` は縦中央。
+ */
+export type AnchorY = 'top' | 'middle' | 'bottom'
+
+/** 既定の横アンカー。**003 以前の保存データ（アンカー無し）を左下として読むための基準**。 */
+export const DEFAULT_ANCHOR_X: AnchorX = 'left'
+
+/** 既定の縦アンカー。**003 以前の保存データ（アンカー無し）を左下として読むための基準**。 */
+export const DEFAULT_ANCHOR_Y: AnchorY = 'bottom'
+
+/** 横アンカーを解決する（未指定は {@link DEFAULT_ANCHOR_X}）。 */
+export function resolveAnchorX(v?: AnchorX): AnchorX {
+  return v ?? DEFAULT_ANCHOR_X
+}
+
+/** 縦アンカーを解決する（未指定は {@link DEFAULT_ANCHOR_Y}）。 */
+export function resolveAnchorY(v?: AnchorY): AnchorY {
+  return v ?? DEFAULT_ANCHOR_Y
+}
+
+/**
+ * 縦横のアンカーをまとめて解決する。
+ * 位置を出す側（generateCss / プレビュー / UI）は**必ずここを通す**こと
+ * — 「未指定 ＝ 左下」の一点をこの関数だけで担保する。
+ */
+export function resolveAnchors(o: Pick<GenerateOptions, 'anchorX' | 'anchorY'>): {
+  x: AnchorX
+  y: AnchorY
+} {
+  return { x: resolveAnchorX(o.anchorX), y: resolveAnchorY(o.anchorY) }
+}
+
 /** `generateCss` の生成オプション。 */
 export interface GenerateOptions {
   /**
@@ -95,10 +135,20 @@ export interface GenerateOptions {
    * false は Streamkit の実 img を差し替える方式で、通話中のユーザーだけ表示（まとめ版向け）。
    */
   alwaysShow: boolean
-  /** 立ち絵の左端(px)。 */
+  /**
+   * 横アンカーからの距離(px)。既定の `left` アンカーなら左端から、`right` なら右端からの距離。
+   * `center` では中央からのズレ量（正で右へ）。フィールド名は保存互換のため `left` のまま。
+   */
   left: number
-  /** 立ち絵の下端(px)。 */
+  /**
+   * 縦アンカーからの距離(px)。既定の `bottom` アンカーなら下端から、`top` なら上端からの距離。
+   * `middle` では中央からのズレ量（正で上へ）。フィールド名は保存互換のため `bottom` のまま。
+   */
   bottom: number
+  /** 横アンカー。未指定は `left`（003 以前の保存データ互換）。 */
+  anchorX?: AnchorX
+  /** 縦アンカー。未指定は `bottom`（003 以前の保存データ互換）。 */
+  anchorY?: AnchorY
   /** 立ち絵の幅(px)。未指定で画像原寸。 */
   width?: number
   /** 静かな人（発話していない立ち絵）を暗くして、話している人を目立たせる。 */
@@ -144,10 +194,14 @@ export interface Preset {
   name: string
   /** 立ち絵画像（data URI 推奨 / 外部URLも可）。 */
   imageUrl: string
-  /** 立ち絵の左端(px)。 */
+  /** 横アンカーからの距離(px)。詳細は {@link GenerateOptions.left}。 */
   left: number
-  /** 立ち絵の下端(px)。 */
+  /** 縦アンカーからの距離(px)。詳細は {@link GenerateOptions.bottom}。 */
   bottom: number
+  /** 横アンカー。未指定は `left`（003 以前の保存データ互換）。 */
+  anchorX?: AnchorX
+  /** 縦アンカー。未指定は `bottom`（003 以前の保存データ互換）。 */
+  anchorY?: AnchorY
   /** 立ち絵の幅(px)。未指定で画像原寸。 */
   width?: number
   /** 静かな人（発話していない立ち絵）を暗くする。 */
@@ -199,6 +253,8 @@ export function presetToOptions(p: Preset, imageNaturalWidth?: number): Generate
     alwaysShow: true,
     left: p.left,
     bottom: p.bottom,
+    anchorX: p.anchorX,
+    anchorY: p.anchorY,
     width: p.width,
     dimWhenQuiet: p.dimWhenQuiet,
     hideWhenAway: p.hideWhenAway,
@@ -226,6 +282,8 @@ export function makeDefaultPreset(id: string): Preset {
     imageUrl: '',
     left: DEFAULT_OPTIONS.left,
     bottom: DEFAULT_OPTIONS.bottom,
+    anchorX: DEFAULT_ANCHOR_X,
+    anchorY: DEFAULT_ANCHOR_Y,
     width: DEFAULT_OPTIONS.width,
     dimWhenQuiet: DEFAULT_OPTIONS.dimWhenQuiet,
     hideWhenAway: DEFAULT_OPTIONS.hideWhenAway,
@@ -290,6 +348,8 @@ export const DEFAULT_OPTIONS: GenerateOptions = {
   alwaysShow: true,
   left: 16,
   bottom: 16,
+  anchorX: DEFAULT_ANCHOR_X,
+  anchorY: DEFAULT_ANCHOR_Y,
   width: undefined,
   dimWhenQuiet: false,
   hideWhenAway: false,
