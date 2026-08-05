@@ -40,22 +40,33 @@ test: npm run typecheck && npm run lint && npx vitest run
 ### 名前ラベル(002)のアンカー追従
 - 現状の `nameBlock` は `left: <立ち絵のleft + offsetX + 帯補正>px` / `bottom: <立ち絵のbottom + offsetY>px` を
   数値で焼く([`generateCss.ts:180`](../../src/lib/generateCss.ts))。**左下基準の座標系に固定**されている。
-- 立ち絵の位置生成を `positionDecls(anchors, x, y)` に切り出したので(T2 完了)、**名前ラベルも同じ関数を通す**。
-  シグネチャは「アンカー + **アンカーからの距離** → 位置宣言 + `centering` 断片」。
-  名前側は「立ち絵の距離 + オフセット」を渡すが、**距離はアンカー基準なので方向の変換が要る**。
+- 立ち絵の位置生成を `positionDecls(anchors, x, y)` に切り出したので(T2 完了)、**名前ラベルも同じ軸ロジックを通す**
+  (T9 完了)。1軸ぶんを作る内部関数 `axisParts(spec, distance, offset, handle, boxSize)` に
+  **座標系の分岐を全部閉じた**。公開の入口は 立ち絵用 `positionDecls` と 名前用 `nameLabelPosition`。
+- 軸の性質(`AxisSpec`)は アンカー → `{ 位置プロパティ, 中央か, translate 軸, 自然な掴み位置 }`。
+  **掴み位置(handle)は「自分のどこを合わせるか」を画面座標の割合で持つ**
+  (横 0 = 左端 / 1 = 右端、縦 0 = 下端 / 1 = 上端)。立ち絵は常に自然位置なので `boxSize` が消え、
+  返る translate は中央寄せ分だけになる(＝`speak-jump` に前置して安全)。
+- 1本の式にまとまった:
+  `D = 距離 + (符号反転?−1:+1)×ズレ + (掴み位置 − 自然位置)×立ち絵の幅` / `translate = ±掴み位置×100%`
 
-  | anchorX | 立ち絵 | 名前(画面座標のズレ `dx`。正で右) |
+  | anchorX | 立ち絵 | 名前(画面座標のズレ `dx`。正で右。帯の幅 `w`) |
   |---|---|---|
-  | `left` | `left: X px` | `left: (X + dx) px` |
-  | `right` | `right: X px` | `right: (X − dx) px` ※ dx の符号が反転する |
-  | `center` | `left: calc(50% + X px)` + `translateX(-50%)` | `left: calc(50% + (X + dx) px)` + `translateX(-50%)` |
+  | `left` | `left: X px` | 左揃え `left: (X+dx) px` / 中央 `left: (X+dx+w/2) px` + `translateX(-50%)` / 右 `left: (X+dx+w) px` + `translateX(-100%)` |
+  | `right` | `right: X px` | 右揃え `right: (X−dx) px` / 中央 `right: (X−dx+w/2) px` + `translateX(50%)` / 左 `right: (X−dx+w) px` + `translateX(100%)` |
+  | `center` | `left: calc(50% + X px)` + `translateX(-50%)` | 中央 `left: calc(50% + (X+dx) px)` + `translateX(-50%)` / 左 `−w/2` / 右 `+w/2` + `translateX(-100%)` |
 
   **右アンカーでオフセットの符号が反転する**のが事故りやすい箇所。「名前を立ち絵より右にずらす」は
   右アンカーでは `right` を減らす方向になる。縦も同じで、**`top` アンカーでは `dy` が反転する**
-  (`bottom` / `middle` は「正の dy = 上」で反転しない)。ここは vitest で固定する。
-- **帯アンカー(`fit: 'text'` の行揃え)の translate も、右/上アンカーでは向きが変わる。**
-  `right: D` に対する `translateX(-100%)` は左へ動く＝右端からの距離が増える方向なので、
-  左下基準のときと同じ符号では成立しない。T9 で `positionDecls` 側に寄せて詰める。
+  (`bottom` / `middle` は「正の dy = 上」で反転しない)。
+  **帯の行揃えの translate も右アンカーでは符号が反転する**(`right: D` に対する `translateX(-100%)` は
+  右端からの距離を**増やす**方向なので、左下基準と同じ符号では成立しない)。ここは vitest + 実ブラウザ実測で固定した。
+- **帯の幅が分からないとき(幅が原寸 かつ 実測なし)は、行揃えをアンカーの自然位置に落とす。**
+  幅なしで成立する唯一の選択。左アンカーなら左端合わせ(＝002 と同じ挙動)、右アンカーなら右端合わせ。
+- **縦は掴み位置を動かさない。** 立ち絵の描画後の高さは CSS から取れないため
+  (`imageNaturalWidth` に相当する高さを持っていない)。結果として名前は**立ち絵のアンカー側の辺**に付く:
+  下アンカーなら足元、上アンカーなら頭側、縦中央なら立ち絵の中央。
+  上アンカーで足元に置きたい場合は `offsetY` を人が入れる必要がある(高さの焼き込みは別 feature)。
 
 ### クロップ
 - **CSS には一切出さない。** 取り込み済み画像を canvas で切り抜き、結果の data URI で `Preset.imageUrl` を

@@ -5,6 +5,7 @@ import {
   type AnchorX,
   type AnchorY,
   type GenerateOptions,
+  type NameAlign,
   type NameLabel,
   type SpeakEffect,
   type TachieUser,
@@ -169,6 +170,75 @@ export function composeTransform(...parts: Array<string | null | undefined>): st
   return parts.filter((p): p is string => p != null && p !== '').join(' ')
 }
 
+/**
+ * 1軸ぶんのアンカーの性質。位置プロパティが決まれば、ズレの符号も translate の向きも決まる。
+ *
+ * `handle`（掴み位置）は**画面座標**の割合で持つ: 横は 0 = 左端 / 1 = 右端、
+ * 縦は 0 = 下端 / 1 = 上端。`natural` はそのアンカーが自分のどこを合わせるか
+ * （`right` アンカーなら自分の右端 = 1）。
+ */
+interface AxisSpec {
+  prop: 'left' | 'right' | 'top' | 'bottom'
+  /** 中央アンカー（`calc(50% ± D)` で出す）。 */
+  center: boolean
+  axis: 'X' | 'Y'
+  /** このアンカーの自然な掴み位置（画面座標の割合）。 */
+  natural: number
+}
+
+function xSpec(a: AnchorX): AxisSpec {
+  if (a === 'right') return { prop: 'right', center: false, axis: 'X', natural: 1 }
+  if (a === 'center') return { prop: 'left', center: true, axis: 'X', natural: 0.5 }
+  return { prop: 'left', center: false, axis: 'X', natural: 0 }
+}
+
+function ySpec(b: AnchorY): AxisSpec {
+  if (b === 'top') return { prop: 'top', center: false, axis: 'Y', natural: 1 }
+  // 縦の中央は `bottom` 基準に揃える（`bottom` アンカーと同じく「正のズレ = 上」を保つため）。
+  if (b === 'middle') return { prop: 'bottom', center: true, axis: 'Y', natural: 0.5 }
+  return { prop: 'bottom', center: false, axis: 'Y', natural: 0 }
+}
+
+/** 1軸ぶんの位置宣言と translate 断片。 */
+interface AxisParts {
+  decl: string
+  translate: string | null
+}
+
+/**
+ * 1軸ぶんの位置を作る。**座標系の分岐はこの関数だけに閉じる**
+ * （どの位置プロパティを使うか / ズレの符号が反転するか / translate の向き）。
+ *
+ * @param spec     アンカーが決める軸の性質
+ * @param distance 立ち絵の「アンカーからの距離」(px)
+ * @param offset   立ち絵に対する**画面座標**のズレ(px)。横は正で右 / 縦は正で上。立ち絵自身は 0
+ * @param handle   自分のどこを合わせるか（画面座標の割合）。既定は `spec.natural`
+ * @param boxSize  掴み位置をずらす基準の箱のサイズ(px)＝立ち絵の幅。自然位置と同じなら効かない
+ */
+function axisParts(
+  spec: AxisSpec,
+  distance: number,
+  offset: number,
+  handle: number,
+  boxSize: number,
+): AxisParts {
+  // 位置プロパティが「画面座標の正方向と逆向きに測る」なら、ズレの符号が反転する。
+  // （`right` アンカーで「右へずらす」は右端からの距離を**減らす**方向）
+  const flip = spec.prop === 'right' || spec.prop === 'top'
+  // 掴み位置を、位置プロパティ自身の辺から数えた割合に直す。
+  const fromProp = flip ? 1 - handle : handle
+  const naturalFromProp = flip ? 1 - spec.natural : spec.natural
+  // 自然位置からずらした分だけ、立ち絵のサイズで位置を動かす（自然位置なら boxSize は消える）。
+  const d = distance + (flip ? -offset : offset) + (fromProp - naturalFromProp) * boxSize
+  // 位置プロパティと translate の正方向が同じ向きなら、掴み位置の戻しは負になる。
+  const sign = spec.prop === 'left' || spec.prop === 'top' ? -1 : 1
+  const pct = Math.round(sign * fromProp * 10000) / 100
+  return {
+    decl: `${spec.prop}: ${spec.center ? centerValue(d) : px(d)};`,
+    translate: pct === 0 ? null : `translate${spec.axis}(${pct}%)`,
+  }
+}
+
 /** {@link positionDecls} の結果。位置宣言と、中央寄せに要る translate 断片。 */
 export interface PositionParts {
   /** `left`/`right`/`top`/`bottom` の宣言（インデント無し・`;` 付き・**横 → 縦**の順）。 */
@@ -181,7 +251,7 @@ export interface PositionParts {
 }
 
 /**
- * アンカー + アンカーからの距離 → 位置宣言 + 中央寄せの translate 断片。
+ * 立ち絵の位置。アンカー + アンカーからの距離 → 位置宣言 + 中央寄せの translate 断片。
  *
  * 距離は**選んだアンカーからの距離**（`right` なら右端から、`top` なら上端から）。
  * 中央（`center`/`middle`）では「中央からのズレ量」で、**正の値が右 / 上**。
@@ -190,38 +260,61 @@ export interface PositionParts {
  * **ズレ量は位置側（`calc`）に載せ、`transform` は純粋に「中央寄せ分」だけに保つ** —
  * こうしておくと発話演出や名前帯の translate と素直に合成できる。
  *
- * 立ち絵・名前ラベル・プレビューは**すべてこの関数を通す**（座標系の分岐を1箇所に閉じるため）。
+ * 立ち絵は掴み位置がアンカーの自然位置（自分の対応する辺）なので、
+ * 返る translate は**中央寄せ分だけ**になる（＝`speak-jump` に前置して安全）。
  */
 export function positionDecls(
   anchors: { x: AnchorX; y: AnchorY },
   x: number,
   y: number,
 ): PositionParts {
-  const decls: string[] = []
-  const centering: string[] = []
-
-  if (anchors.x === 'right') {
-    decls.push(`right: ${px(x)};`)
-  } else if (anchors.x === 'center') {
-    decls.push(`left: ${centerValue(x)};`)
-    // `left: 50%` は箱の左端を中央に置くので、自分の幅の半分だけ左へ戻す。
-    centering.push('translateX(-50%)')
-  } else {
-    decls.push(`left: ${px(x)};`)
+  const sx = xSpec(anchors.x)
+  const sy = ySpec(anchors.y)
+  const ax = axisParts(sx, x, 0, sx.natural, 0)
+  const ay = axisParts(sy, y, 0, sy.natural, 0)
+  return {
+    decls: [ax.decl, ay.decl],
+    centering: [ax.translate, ay.translate].filter((t): t is string => t != null),
   }
+}
 
-  if (anchors.y === 'top') {
-    decls.push(`top: ${px(y)};`)
-  } else if (anchors.y === 'middle') {
-    // 縦は `bottom` 基準に揃える（`bottom` アンカーと同じく「正のズレ = 上」を保つため）。
-    decls.push(`bottom: ${centerValue(y)};`)
-    // `bottom: 50%` は箱の下端を中央に置くので、自分の高さの半分だけ下へ戻す（＝正方向）。
-    centering.push('translateY(50%)')
-  } else {
-    decls.push(`bottom: ${px(y)};`)
+/** 帯の行揃え → 掴み位置（画面座標の割合。0 = 左端 / 0.5 = 中央 / 1 = 右端）。 */
+const ALIGN_HANDLE: Record<NameAlign, number> = { left: 0, center: 0.5, right: 1 }
+
+/**
+ * 名前ラベルの位置。**立ち絵のアンカーに追従させる**（立ち絵と同じ軸ロジックを通す）。
+ *
+ * 名前は「立ち絵の位置 + 画面座標のズレ」で置く。距離はアンカー基準なので、
+ * **右アンカーでは `offsetX` の符号が、上アンカーでは `offsetY` の符号が反転する**
+ * （「立ち絵より右へ」は右端からの距離を減らす方向）。ここは {@link axisParts} が吸収する。
+ *
+ * 縦は立ち絵の**アンカー側の辺**に合わせる（下アンカーなら足元、上アンカーなら頭側）。
+ * 立ち絵の描画後の高さは CSS から取れないため、縦は掴み位置を動かせない。
+ *
+ * @param handleX 帯の行揃えぶんの掴み位置。幅が分からないときはアンカーの自然位置を渡す
+ * @param boxWidth 立ち絵の幅(px)。掴み位置が自然位置と同じなら結果に出てこない
+ */
+export function nameLabelPosition(
+  anchors: { x: AnchorX; y: AnchorY },
+  tachie: { x: number; y: number },
+  offset: { dx: number; dy: number },
+  handleX: number,
+  boxWidth: number,
+): { decls: string[]; transforms: string[] } {
+  const sx = xSpec(anchors.x)
+  const sy = ySpec(anchors.y)
+  const ax = axisParts(sx, tachie.x, offset.dx, handleX, boxWidth)
+  // 縦は掴み位置を動かさない（立ち絵の高さが分からないため）。
+  const ay = axisParts(sy, tachie.y, offset.dy, sy.natural, 0)
+  return {
+    decls: [ax.decl, ay.decl],
+    transforms: [ax.translate, ay.translate].filter((t): t is string => t != null),
   }
+}
 
-  return { decls, centering }
+/** アンカーの自然な掴み位置（帯の幅が分からないときの行揃えの落としどころ）。 */
+export function naturalHandleX(a: AnchorX): number {
+  return xSpec(a).natural
 }
 
 /** 文字の縁取り（8方向の text-shadow）。 */
@@ -243,7 +336,7 @@ function textOutline(color: string, width: number): string {
 
 /**
  * 名前ラベル `body::before` のブロック。名前が空、または `show` が false なら `null`（＝出力しない）。
- * 位置は立ち絵の `left`/`bottom` にオフセットを足して数値で出す（貼った後に人が読んで直せるように）。
+ * 位置は**立ち絵と同じアンカー**からの距離で出す（{@link nameLabelPosition}）。
  */
 function nameBlock(user: TachieUser, options: GenerateOptions): string | null {
   const label: NameLabel = options.nameLabel
@@ -251,6 +344,7 @@ function nameBlock(user: TachieUser, options: GenerateOptions): string | null {
   if (!label.show || text === '') return null
 
   const { left, bottom, width, hideWhenAway, imageNaturalWidth } = options
+  const anchors = resolveAnchors(options)
   const font = safeFontFamily(label.fontFamily)
   // 行揃えには箱の幅が要る。幅指定があればそれ、原寸ならアプリ側で測った実サイズを使う。
   // 幅 0 以下は「箱が無い」と同じなので基準に採らない。
@@ -259,24 +353,28 @@ function nameBlock(user: TachieUser, options: GenerateOptions): string | null {
     explicitWidth == null && imageNaturalWidth != null && imageNaturalWidth > 0
   const boxWidth = explicitWidth ?? (measured ? imageNaturalWidth : undefined)
   // 背景（テロップ帯）を「文字幅」に合わせるモード。帯を縮めるため width を出さず、
-  // 立ち絵に対する位置合わせは transform でアンカーする（幅が分からなくても左寄せなら成立）。
+  // 立ち絵に対する位置合わせは transform でアンカーする。
   const hug = label.background && label.fit === 'text'
-  const anchor = hug && boxWidth != null ? label.align : 'left'
-  const w = boxWidth ?? 0
-  const anchorShift = anchor === 'center' ? w / 2 : anchor === 'right' ? w : 0
-  const leftPx = Math.round((left + label.offsetX + anchorShift) * 100) / 100
-  // 帯を文字幅に合わせるモードの位置合わせ（帯の幅が分からないので自分のサイズで戻す）。
+  // 帯を縮めるときだけ、立ち絵の幅を使って行揃えぶん掴み位置をずらす。
+  // 幅が分からないなら**アンカーの自然な掴み位置**に落とす（幅なしで成立する唯一の選択。
+  // 左アンカーなら左端合わせ＝002 と同じ挙動、右アンカーなら右端合わせ）。
+  const shifted = hug && boxWidth != null
+  const handleX = shifted ? ALIGN_HANDLE[label.align] : naturalHandleX(anchors.x)
+  const pos = nameLabelPosition(
+    anchors,
+    { x: left, y: bottom },
+    { dx: label.offsetX, dy: label.offsetY },
+    handleX,
+    boxWidth ?? 0,
+  )
   // ここも transform を出す箇所なので composeTransform を通す（→ 不変条件）。
-  const bandShift =
-    anchor === 'center' ? 'translateX(-50%)' : anchor === 'right' ? 'translateX(-100%)' : null
-  const transform = composeTransform(bandShift)
+  const transform = composeTransform(...pos.transforms)
   const pad = label.background && (label.backgroundPadX > 0 || label.backgroundPadY > 0)
 
   const decls = [
     `  content: ${cssString(text)};`,
     `  position: fixed;`,
-    `  left: ${leftPx}px;`,
-    `  bottom: ${Math.round((bottom + label.offsetY) * 100) / 100}px;`,
+    ...pos.decls.map((d) => `  ${d}`),
     // 立ち絵（::after）は ::before より後に描かれるので、重ねたときは名前を前面に出す。
     `  z-index: 1;`,
     `  display: ${hideWhenAway ? 'none' : 'block'};`,
@@ -310,8 +408,9 @@ function nameBlock(user: TachieUser, options: GenerateOptions): string | null {
     `  white-space: pre;`,
     `  pointer-events: none;`,
   ]
-  // 実測幅を実際に使ったときだけ注記を出す（左寄せの帯など、使っていないなら黙る）。
-  const usesBoxWidth = boxWidth != null && (!hug || anchor !== 'left')
+  // 実測幅を実際に使ったときだけ注記を出す（アンカーの自然位置に合わせる帯など、使っていないなら黙る）。
+  const usesBoxWidth =
+    boxWidth != null && (!hug || (shifted && handleX !== naturalHandleX(anchors.x)))
   const header =
     measured && usesBoxWidth
       ? `/* 名前（任意テキスト。Streamkit の名前は隠し、これだけを出す）

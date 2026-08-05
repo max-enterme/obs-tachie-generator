@@ -15,4 +15,4 @@ feature: position-anchor
 - [ ] T6: クロップの純粋関数 — `src/lib/crop.ts` に `normalizeCropRect`(クランプ/整数化/空矩形の拒否)と `computeTrimBounds`(透明余白の検出。全面透明はトリムしない)+ 境界ケースの vitest  <!-- #17 -->
 - [ ] T7: 焼き込み — `cropDataUri` / `detectTrimRect`(canvas, PNG 固定・再リサイズなし)。CORS 汚染で `getImageData` が失敗する経路のエラーハンドリング  <!-- #18 -->
 - [ ] T8: クロップ UI(PresetPanel) — 「余白を詰める」+ 範囲指定(ドラッグ + x/y/幅/高さ の数値入力)、適用前の確認と「元に戻せません」表示、クロップ後の寸法・埋め込みサイズの表示  <!-- #19 -->
-- [ ] T9: 名前ラベル(002)のアンカー追従 — `nameBlock` の `left`/`bottom` 直書きを `positionDecls` 経由へ。右アンカーでのオフセット符号反転と中央アンカーの `calc(-50% + dx)` を vitest で固定。名前OFF出力は 002 のゴールデンと一致を維持  <!-- #22 -->
+- [x] T9: 名前ラベル(002)のアンカー追従 — `nameBlock` の `left`/`bottom` 直書きを `positionDecls` 経由へ。右アンカーでのオフセット符号反転と中央アンカーの `calc(-50% + dx)` を vitest で固定。名前OFF出力は 002 のゴールデンと一致を維持  <!-- #22 -->
