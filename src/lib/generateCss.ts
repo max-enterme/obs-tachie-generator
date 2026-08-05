@@ -1,6 +1,9 @@
 import {
   DIM_BRIGHTNESS_PCT,
+  resolveAnchors,
   resolveDisplayName,
+  type AnchorX,
+  type AnchorY,
   type GenerateOptions,
   type NameLabel,
   type SpeakEffect,
@@ -23,6 +26,10 @@ import {
  *
  * 「話すときの動き」は 枠(outline) / 点滅(blink) / ぴょこぴょこ(bounce) を個別に on/off。
  * 「静かな人を暗くする」(dimWhenQuiet) は非発話の立ち絵を暗くし、発話中だけ明るく戻す。
+ *
+ * 位置は**アンカー（左/中央/右 × 上/中央/下）からの距離**で出す（{@link positionDecls}）。
+ * 中央寄せは `transform` を使うため、発話演出・名前帯の `transform` と衝突しうる。
+ * → **`transform` を出す箇所は必ず {@link composeTransform} を通す**（コード側の不変条件）。
  *
  * 名前（任意テキスト）は `body::before` の `content` で描く。Streamkit の実要素（`Voice_name__`）は
  * 潰しているので Discord のアカウント名は出ず、**ここで出す名前だけ**が画面に出る。
@@ -137,6 +144,86 @@ export function cssColorWithOpacity(color: string, opacityPct: number): string {
   return `rgba(${r}, ${g}, ${b}, ${Number(a.toFixed(2))})`
 }
 
+/** px 値を CSS に出す（小数第2位で丸め、整数はそのまま）。 */
+function px(v: number): string {
+  return `${Math.round(v * 100) / 100}px`
+}
+
+/** `50%` に px のズレを足した位置値。ズレ 0 なら `50%` のまま（calc を出さない）。 */
+function centerValue(v: number): string {
+  const n = Math.round(v * 100) / 100
+  if (n === 0) return '50%'
+  return `calc(50% ${n > 0 ? '+' : '-'} ${Math.abs(n)}px)`
+}
+
+/**
+ * **`transform` を出す箇所は必ずこの関数を通す**（コード側の不変条件）。
+ *
+ * 中央寄せの translate と発話演出の translate を別々の `transform` 宣言・別々の keyframe に書くと
+ * **後勝ちで打ち消し合う**（中央寄せ + ぴょこぴょこで立ち絵が画面端へ飛ぶ）。
+ * 合成する一点をここに集めることで、断片を足す側は順序と重複だけ気にすればよくなる。
+ *
+ * 空文字を返したら「`transform` 宣言を出さない」の意味（`transform: ;` を吐かないため）。
+ */
+export function composeTransform(...parts: Array<string | null | undefined>): string {
+  return parts.filter((p): p is string => p != null && p !== '').join(' ')
+}
+
+/** {@link positionDecls} の結果。位置宣言と、中央寄せに要る translate 断片。 */
+export interface PositionParts {
+  /** `left`/`right`/`top`/`bottom` の宣言（インデント無し・`;` 付き・**横 → 縦**の順）。 */
+  decls: string[]
+  /**
+   * 中央寄せ分の translate 断片。**{@link composeTransform} の先頭に置く**
+   * （発話演出の translate より前に来ないと、演出のズレが中央寄せの基準を動かす）。
+   */
+  centering: string[]
+}
+
+/**
+ * アンカー + アンカーからの距離 → 位置宣言 + 中央寄せの translate 断片。
+ *
+ * 距離は**選んだアンカーからの距離**（`right` なら右端から、`top` なら上端から）。
+ * 中央（`center`/`middle`）では「中央からのズレ量」で、**正の値が右 / 上**。
+ *
+ * 中央寄せは `50%`（＝箱の端を画面中央に置く）+ 自分のサイズ半分の戻しで作る。
+ * **ズレ量は位置側（`calc`）に載せ、`transform` は純粋に「中央寄せ分」だけに保つ** —
+ * こうしておくと発話演出や名前帯の translate と素直に合成できる。
+ *
+ * 立ち絵・名前ラベル・プレビューは**すべてこの関数を通す**（座標系の分岐を1箇所に閉じるため）。
+ */
+export function positionDecls(
+  anchors: { x: AnchorX; y: AnchorY },
+  x: number,
+  y: number,
+): PositionParts {
+  const decls: string[] = []
+  const centering: string[] = []
+
+  if (anchors.x === 'right') {
+    decls.push(`right: ${px(x)};`)
+  } else if (anchors.x === 'center') {
+    decls.push(`left: ${centerValue(x)};`)
+    // `left: 50%` は箱の左端を中央に置くので、自分の幅の半分だけ左へ戻す。
+    centering.push('translateX(-50%)')
+  } else {
+    decls.push(`left: ${px(x)};`)
+  }
+
+  if (anchors.y === 'top') {
+    decls.push(`top: ${px(y)};`)
+  } else if (anchors.y === 'middle') {
+    // 縦は `bottom` 基準に揃える（`bottom` アンカーと同じく「正のズレ = 上」を保つため）。
+    decls.push(`bottom: ${centerValue(y)};`)
+    // `bottom: 50%` は箱の下端を中央に置くので、自分の高さの半分だけ下へ戻す（＝正方向）。
+    centering.push('translateY(50%)')
+  } else {
+    decls.push(`bottom: ${px(y)};`)
+  }
+
+  return { decls, centering }
+}
+
 /** 文字の縁取り（8方向の text-shadow）。 */
 function textOutline(color: string, width: number): string {
   const c = safeColor(color)
@@ -178,8 +265,11 @@ function nameBlock(user: TachieUser, options: GenerateOptions): string | null {
   const w = boxWidth ?? 0
   const anchorShift = anchor === 'center' ? w / 2 : anchor === 'right' ? w : 0
   const leftPx = Math.round((left + label.offsetX + anchorShift) * 100) / 100
-  const transform =
+  // 帯を文字幅に合わせるモードの位置合わせ（帯の幅が分からないので自分のサイズで戻す）。
+  // ここも transform を出す箇所なので composeTransform を通す（→ 不変条件）。
+  const bandShift =
     anchor === 'center' ? 'translateX(-50%)' : anchor === 'right' ? 'translateX(-100%)' : null
+  const transform = composeTransform(bandShift)
   const pad = label.background && (label.backgroundPadX > 0 || label.backgroundPadY > 0)
 
   const decls = [
@@ -230,11 +320,19 @@ function nameBlock(user: TachieUser, options: GenerateOptions): string | null {
   return `${header}\nbody::before {\n${decls.join('\n')}\n}`
 }
 
-const KEYFRAMES_JUMP_TRANSFORM = (jumpPx: number) => `@keyframes speak-jump {
-  0% { transform: translateY(0); }
-  50% { transform: translateY(-${jumpPx}px); }
-  100% { transform: translateY(0); }
+/**
+ * ぴょこぴょこ（transform 版）。**中央寄せ分の translate を各ステップに前置する** —
+ * keyframe の `transform` は要素の `transform` を丸ごと置き換えるので、織り込まないと
+ * アニメの間だけ中央寄せが外れて立ち絵が飛ぶ（spec の受け入れ条件）。
+ */
+const KEYFRAMES_JUMP_TRANSFORM = (jumpPx: number, centering: string[]) => {
+  const at = (v: string) => composeTransform(...centering, v)
+  return `@keyframes speak-jump {
+  0% { transform: ${at('translateY(0)')}; }
+  50% { transform: ${at(`translateY(-${jumpPx}px)`)}; }
+  100% { transform: ${at('translateY(0)')}; }
 }`
+}
 
 const KEYFRAMES_JUMP_BOTTOM = (jumpPx: number) => `@keyframes speak-jump {
   0% { bottom: 0px; }
@@ -293,12 +391,14 @@ function keyframeBlocks(
   effects: Effect[],
   speak: SpeakEffect,
   jumpKind: 'transform' | 'bottom',
+  /** 中央寄せ分の translate（transform 版の跳ねに前置する）。 */
+  centering: string[] = [],
 ): string[] {
   const blocks: string[] = []
   if (effects.includes('jump')) {
     blocks.push(
       jumpKind === 'transform'
-        ? KEYFRAMES_JUMP_TRANSFORM(speak.jumpPx)
+        ? KEYFRAMES_JUMP_TRANSFORM(speak.jumpPx, centering)
         : KEYFRAMES_JUMP_BOTTOM(speak.jumpPx),
     )
   }
@@ -314,14 +414,18 @@ export function generateStandaloneCss(user: TachieUser, options: GenerateOptions
   const id = safeId(user.id)
   const { left, bottom, width, dimWhenQuiet, hideWhenAway, speak } = options
   const effects = activeEffects(speak)
+  // 位置はアンカー基準（未指定は左下＝従来の出力と一致）。中央寄せ分の translate はここで受け取り、
+  // 静止時の transform と speak-jump の両方に**同じものを**渡す（→ composeTransform の不変条件）。
+  const pos = positionDecls(resolveAnchors(options), left, bottom)
+  const staticTransform = composeTransform(...pos.centering)
 
   const afterDecls = [
     `  content: var(--img-stand-url-${id});`,
     `  position: fixed;`,
-    `  left: ${left}px;`,
-    `  bottom: ${bottom}px;`,
+    ...pos.decls.map((d) => `  ${d}`),
     // 通話にいないときは隠す設定なら、既定は非表示（在室時だけ下のルールで出す）。
     `  display: ${hideWhenAway ? 'none' : 'block'};`,
+    ...(staticTransform ? [`  transform: ${staticTransform};`] : []),
     ...(width != null ? [`  width: ${width}px;`] : []),
     // 静かな人を暗くする：非発話時の既定を暗く
     ...(dimWhenQuiet ? [`  filter: brightness(${DIM_BRIGHTNESS_PCT}%);`] : []),
@@ -380,7 +484,7 @@ ${selectors.join(',\n')} {
     `${
       nameCss ? '/* Streamkit のアカウント名は隠す（名前は上のブロックで出す） */\n' : ''
     }[class*="Voice_name__"], [class*="Voice_user__"] {\n  display: none !important;\n}`,
-    ...keyframeBlocks(effects, speak, 'transform'),
+    ...keyframeBlocks(effects, speak, 'transform', pos.centering),
   )
 
   return parts.join('\n\n') + '\n'
@@ -388,6 +492,9 @@ ${selectors.join(',\n')} {
 
 /**
  * まとめ（combined）。Streamkit の実 img を人ごとに差し替える。1ソースに複数人を出せるが通話中のみ表示。
+ *
+ * **アンカー（`anchorX`/`anchorY`）は解釈しない**（003 のスコープ外。UI から呼ばない温存コード）。
+ * 位置は flex コンテナの padding で出すため、`left`/`bottom` は常に左下からの距離として扱う。
  */
 export function generateCombinedCss(users: TachieUser[], options: GenerateOptions): string {
   const { left, bottom, width, dimWhenQuiet, speak } = options

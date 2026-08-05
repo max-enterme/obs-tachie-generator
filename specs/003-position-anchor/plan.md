@@ -17,32 +17,45 @@ test: npm run typecheck && npm run lint && npx vitest run
   | anchorX | 出力 |
   |---|---|
   | `left` | `left: <X>px;` |
-  | `center` | `left: 50%;` + translate に `-50%` |
+  | `center` | `left: calc(50% + <X>px);` + translate に `-50%`（X=0 なら `left: 50%;`） |
   | `right` | `right: <X>px;` |
 
-  縦も同様(`top` / `top: 50%` + `-50%` / `bottom`)。
+  縦も同様。ただし **縦の中央は `top` ではなく `bottom` 基準**にする(T2 実装時に確定):
+  `bottom: calc(50% + <Y>px)` + `translateY(50%)`。`bottom` アンカーと同じく **「正の Y = 上」を保つ**ため
+  (`top` 基準にすると中央アンカーだけオフセットの符号が反転して事故る)。
+- **中央寄せのズレ量は位置側(`calc`)に載せ、`transform` は「中央寄せ分」だけに保つ**(T2 実装時に確定)。
+  当初は translate 側に `calc(-50% + <X>px)` を書く形で考えていたが、それだと「中央寄せ分」と
+  「オフセット分」が transform の中で混ざり、発話演出・名前帯の translate と合成したときに
+  どの断片が何なのか追えなくなる。位置側に寄せると transform は常に定数(`translateX(-50%)` /
+  `translateY(50%)`)になり、合成が単なる連結で済む。
 - **`transform` の一元管理**を入れる。中央寄せの `translate` と発話演出の `translateY` を別々に書くと後勝ちで壊れるため、
   「中央寄せ分の translate」を返す小さな純粋関数を作り、`body::after` の静止時 `transform` と
   `@keyframes speak-jump` の**両方が同じ関数の結果を前置**する形にする(spec の案1)。
   **`transform` を出す箇所は3つある**(002 マージ後の実測): ①立ち絵の静止時 ②`@keyframes speak-jump`
   ③名前ラベル `body::before` の帯アンカー(`translateX(-50%)` / `translateX(-100%)`,
   [`generateCss.ts:181`](../../src/lib/generateCss.ts))。**この3つを1つの合成関数に通す**のが不変条件。
+  → T3 で `composeTransform(...parts)` に一本化済み(空なら宣言を出さない)。
+  `positionDecls` が返す `centering` を**静止時と `speak-jump` の両方が前置する**形にした。
 
 ### 名前ラベル(002)のアンカー追従
 - 現状の `nameBlock` は `left: <立ち絵のleft + offsetX + 帯補正>px` / `bottom: <立ち絵のbottom + offsetY>px` を
   数値で焼く([`generateCss.ts:180`](../../src/lib/generateCss.ts))。**左下基準の座標系に固定**されている。
-- 立ち絵の位置生成を `positionDecls(options)` に切り出すとき、**名前ラベルも同じ関数を通す**。
-  名前側は「立ち絵の位置 + オフセット」なので、`positionDecls` を
-  **「アンカー + オフセット量 → 位置宣言 + transform 断片」を返す形**にしておけば両方から呼べる。
+- 立ち絵の位置生成を `positionDecls(anchors, x, y)` に切り出したので(T2 完了)、**名前ラベルも同じ関数を通す**。
+  シグネチャは「アンカー + **アンカーからの距離** → 位置宣言 + `centering` 断片」。
+  名前側は「立ち絵の距離 + オフセット」を渡すが、**距離はアンカー基準なので方向の変換が要る**。
 
-  | anchorX | 立ち絵 | 名前(オフセット `dx`) |
+  | anchorX | 立ち絵 | 名前(画面座標のズレ `dx`。正で右) |
   |---|---|---|
   | `left` | `left: X px` | `left: (X + dx) px` |
   | `right` | `right: X px` | `right: (X − dx) px` ※ dx の符号が反転する |
-  | `center` | `left: 50%` + `translateX(-50%)` | `left: 50%` + `translateX(calc(-50% + dx px))` |
+  | `center` | `left: calc(50% + X px)` + `translateX(-50%)` | `left: calc(50% + (X + dx) px)` + `translateX(-50%)` |
 
   **右アンカーでオフセットの符号が反転する**のが事故りやすい箇所。「名前を立ち絵より右にずらす」は
-  右アンカーでは `right` を減らす方向になる。ここは vitest で固定する。
+  右アンカーでは `right` を減らす方向になる。縦も同じで、**`top` アンカーでは `dy` が反転する**
+  (`bottom` / `middle` は「正の dy = 上」で反転しない)。ここは vitest で固定する。
+- **帯アンカー(`fit: 'text'` の行揃え)の translate も、右/上アンカーでは向きが変わる。**
+  `right: D` に対する `translateX(-100%)` は左へ動く＝右端からの距離が増える方向なので、
+  左下基準のときと同じ符号では成立しない。T9 で `positionDecls` 側に寄せて詰める。
 
 ### クロップ
 - **CSS には一切出さない。** 取り込み済み画像を canvas で切り抜き、結果の data URI で `Preset.imageUrl` を
