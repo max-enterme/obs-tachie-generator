@@ -1,8 +1,12 @@
 import {
+  DEFAULT_ANCHOR_X,
+  DEFAULT_ANCHOR_Y,
   DEFAULT_NAME_LABEL,
   DEFAULT_OPTIONS,
   DEFAULT_SPEAK,
   EMPTY_SELECTION,
+  type AnchorX,
+  type AnchorY,
   type AppState,
   type AppUser,
   type NameAlign,
@@ -121,12 +125,24 @@ function normalizePreset(raw: unknown): Preset | null {
   if (typeof raw !== 'object' || raw === null) return null
   const o = raw as Record<string, unknown>
   if (typeof o.id !== 'string') return null
+  // アンカーは 003 で足した任意フィールド。欠損・不正値は既定（＝左下）へ倒し、
+  // 003 以前の保存データが従来どおり「左下」として読めることを担保する。
+  const anchorX =
+    o.anchorX === 'left' || o.anchorX === 'center' || o.anchorX === 'right'
+      ? (o.anchorX as AnchorX)
+      : DEFAULT_ANCHOR_X
+  const anchorY =
+    o.anchorY === 'top' || o.anchorY === 'middle' || o.anchorY === 'bottom'
+      ? (o.anchorY as AnchorY)
+      : DEFAULT_ANCHOR_Y
   return {
     id: o.id,
     name: typeof o.name === 'string' ? o.name : '',
     imageUrl: typeof o.imageUrl === 'string' ? o.imageUrl : '',
     left: typeof o.left === 'number' ? o.left : DEFAULT_OPTIONS.left,
     bottom: typeof o.bottom === 'number' ? o.bottom : DEFAULT_OPTIONS.bottom,
+    anchorX,
+    anchorY,
     // 幅 0 以下は「原寸」と同義（立ち絵が消える指定は受け付けない）。
     width: typeof o.width === 'number' && o.width > 0 ? o.width : undefined,
     dimWhenQuiet:
