@@ -28,7 +28,7 @@ import {
  * 「話すときの動き」は 枠(outline) / 点滅(blink) / ぴょこぴょこ(bounce) を個別に on/off。
  * 「静かな人を暗くする」(dimWhenQuiet) は非発話の立ち絵を暗くし、発話中だけ明るく戻す。
  *
- * 位置は**アンカー（左/中央/右 × 上/中央/下）からの距離**で出す（{@link positionDecls}）。
+ * 位置は**アンカー（左/中央/右 × 上/中央/下）からの距離**で出す（{@link placeTachie}）。
  * 中央寄せは `transform` を使うため、発話演出・名前帯の `transform` と衝突しうる。
  * → **`transform` を出す箇所は必ず {@link composeTransform} を通す**（コード側の不変条件）。
  *
@@ -199,29 +199,46 @@ function ySpec(b: AnchorY): AxisSpec {
   return { prop: 'bottom', center: false, axis: 'Y', natural: 0 }
 }
 
-/** 1軸ぶんの位置宣言と translate 断片。 */
-interface AxisParts {
-  decl: string
-  translate: string | null
+/**
+ * 1軸ぶんの配置。**CSS の文字列にする前の素の値**で持つ
+ * — 出力CSSは px で出し、プレビューは基準1920×1080 に対する % で出すため、
+ * 単位の付け方だけが違って座標の決め方は同じ。
+ */
+export interface AxisPlacement {
+  /** 使う位置プロパティ。 */
+  prop: 'left' | 'right' | 'top' | 'bottom'
+  /** 位置プロパティに出す距離(px)。`fromCenter` なら「中央 `50%` に足す量」。 */
+  distance: number
+  /** `calc(50% ± distance)` の形で出すか（中央アンカー）。 */
+  fromCenter: boolean
+  axis: 'X' | 'Y'
+  /** translate の割合(%)。0 なら translate は要らない。 */
+  translatePct: number
+}
+
+/** 縦横の配置。 */
+export interface Placement {
+  x: AxisPlacement
+  y: AxisPlacement
 }
 
 /**
- * 1軸ぶんの位置を作る。**座標系の分岐はこの関数だけに閉じる**
+ * 1軸ぶんの配置を決める。**座標系の分岐はこの関数だけに閉じる**
  * （どの位置プロパティを使うか / ズレの符号が反転するか / translate の向き）。
  *
  * @param spec     アンカーが決める軸の性質
  * @param distance 立ち絵の「アンカーからの距離」(px)
  * @param offset   立ち絵に対する**画面座標**のズレ(px)。横は正で右 / 縦は正で上。立ち絵自身は 0
- * @param handle   自分のどこを合わせるか（画面座標の割合）。既定は `spec.natural`
+ * @param handle   自分のどこを合わせるか（画面座標の割合）。立ち絵は `spec.natural`
  * @param boxSize  掴み位置をずらす基準の箱のサイズ(px)＝立ち絵の幅。自然位置と同じなら効かない
  */
-function axisParts(
+function axisPlacement(
   spec: AxisSpec,
   distance: number,
   offset: number,
   handle: number,
   boxSize: number,
-): AxisParts {
+): AxisPlacement {
   // 位置プロパティが「画面座標の正方向と逆向きに測る」なら、ズレの符号が反転する。
   // （`right` アンカーで「右へずらす」は右端からの距離を**減らす**方向）
   const flip = spec.prop === 'right' || spec.prop === 'top'
@@ -232,89 +249,90 @@ function axisParts(
   const d = distance + (flip ? -offset : offset) + (fromProp - naturalFromProp) * boxSize
   // 位置プロパティと translate の正方向が同じ向きなら、掴み位置の戻しは負になる。
   const sign = spec.prop === 'left' || spec.prop === 'top' ? -1 : 1
-  const pct = Math.round(sign * fromProp * 10000) / 100
   return {
-    decl: `${spec.prop}: ${spec.center ? centerValue(d) : px(d)};`,
-    translate: pct === 0 ? null : `translate${spec.axis}(${pct}%)`,
+    prop: spec.prop,
+    distance: Math.round(d * 100) / 100,
+    fromCenter: spec.center,
+    axis: spec.axis,
+    translatePct: Math.round(sign * fromProp * 10000) / 100,
   }
 }
 
-/** {@link positionDecls} の結果。位置宣言と、中央寄せに要る translate 断片。 */
-export interface PositionParts {
-  /** `left`/`right`/`top`/`bottom` の宣言（インデント無し・`;` 付き・**横 → 縦**の順）。 */
-  decls: string[]
-  /**
-   * 中央寄せ分の translate 断片。**{@link composeTransform} の先頭に置く**
-   * （発話演出の translate より前に来ないと、演出のズレが中央寄せの基準を動かす）。
-   */
-  centering: string[]
-}
-
 /**
- * 立ち絵の位置。アンカー + アンカーからの距離 → 位置宣言 + 中央寄せの translate 断片。
- *
- * 距離は**選んだアンカーからの距離**（`right` なら右端から、`top` なら上端から）。
+ * 立ち絵の配置。距離は**選んだアンカーからの距離**（`right` なら右端から、`top` なら上端から）。
  * 中央（`center`/`middle`）では「中央からのズレ量」で、**正の値が右 / 上**。
  *
- * 中央寄せは `50%`（＝箱の端を画面中央に置く）+ 自分のサイズ半分の戻しで作る。
- * **ズレ量は位置側（`calc`）に載せ、`transform` は純粋に「中央寄せ分」だけに保つ** —
- * こうしておくと発話演出や名前帯の translate と素直に合成できる。
- *
  * 立ち絵は掴み位置がアンカーの自然位置（自分の対応する辺）なので、
- * 返る translate は**中央寄せ分だけ**になる（＝`speak-jump` に前置して安全）。
+ * 出てくる translate は**中央寄せ分だけ**になる（＝`speak-jump` に前置して安全）。
  */
-export function positionDecls(
-  anchors: { x: AnchorX; y: AnchorY },
-  x: number,
-  y: number,
-): PositionParts {
+export function placeTachie(anchors: { x: AnchorX; y: AnchorY }, x: number, y: number): Placement {
   const sx = xSpec(anchors.x)
   const sy = ySpec(anchors.y)
-  const ax = axisParts(sx, x, 0, sx.natural, 0)
-  const ay = axisParts(sy, y, 0, sy.natural, 0)
   return {
-    decls: [ax.decl, ay.decl],
-    centering: [ax.translate, ay.translate].filter((t): t is string => t != null),
+    x: axisPlacement(sx, x, 0, sx.natural, 0),
+    y: axisPlacement(sy, y, 0, sy.natural, 0),
   }
 }
 
 /** 帯の行揃え → 掴み位置（画面座標の割合。0 = 左端 / 0.5 = 中央 / 1 = 右端）。 */
-const ALIGN_HANDLE: Record<NameAlign, number> = { left: 0, center: 0.5, right: 1 }
+export const ALIGN_HANDLE: Record<NameAlign, number> = { left: 0, center: 0.5, right: 1 }
 
 /**
- * 名前ラベルの位置。**立ち絵のアンカーに追従させる**（立ち絵と同じ軸ロジックを通す）。
+ * 名前ラベルの配置。**立ち絵のアンカーに追従させる**（立ち絵と同じ軸ロジックを通す）。
  *
  * 名前は「立ち絵の位置 + 画面座標のズレ」で置く。距離はアンカー基準なので、
  * **右アンカーでは `offsetX` の符号が、上アンカーでは `offsetY` の符号が反転する**
- * （「立ち絵より右へ」は右端からの距離を減らす方向）。ここは {@link axisParts} が吸収する。
+ * （「立ち絵より右へ」は右端からの距離を減らす方向）。ここは {@link axisPlacement} が吸収する。
  *
  * 縦は立ち絵の**アンカー側の辺**に合わせる（下アンカーなら足元、上アンカーなら頭側）。
  * 立ち絵の描画後の高さは CSS から取れないため、縦は掴み位置を動かせない。
  *
- * @param handleX 帯の行揃えぶんの掴み位置。幅が分からないときはアンカーの自然位置を渡す
+ * @param handleX 帯の行揃えぶんの掴み位置。幅が分からないときは {@link naturalHandleX} を渡す
  * @param boxWidth 立ち絵の幅(px)。掴み位置が自然位置と同じなら結果に出てこない
  */
-export function nameLabelPosition(
+export function placeNameLabel(
   anchors: { x: AnchorX; y: AnchorY },
   tachie: { x: number; y: number },
   offset: { dx: number; dy: number },
   handleX: number,
   boxWidth: number,
-): { decls: string[]; transforms: string[] } {
+): Placement {
   const sx = xSpec(anchors.x)
   const sy = ySpec(anchors.y)
-  const ax = axisParts(sx, tachie.x, offset.dx, handleX, boxWidth)
-  // 縦は掴み位置を動かさない（立ち絵の高さが分からないため）。
-  const ay = axisParts(sy, tachie.y, offset.dy, sy.natural, 0)
   return {
-    decls: [ax.decl, ay.decl],
-    transforms: [ax.translate, ay.translate].filter((t): t is string => t != null),
+    x: axisPlacement(sx, tachie.x, offset.dx, handleX, boxWidth),
+    // 縦は掴み位置を動かさない（立ち絵の高さが分からないため）。
+    y: axisPlacement(sy, tachie.y, offset.dy, sy.natural, 0),
   }
 }
 
 /** アンカーの自然な掴み位置（帯の幅が分からないときの行揃えの落としどころ）。 */
 export function naturalHandleX(a: AnchorX): number {
   return xSpec(a).natural
+}
+
+/** {@link Placement} の結果。位置宣言と translate 断片。 */
+export interface PositionParts {
+  /** `left`/`right`/`top`/`bottom` の宣言（インデント無し・`;` 付き・**横 → 縦**の順）。 */
+  decls: string[]
+  /**
+   * translate 断片。立ち絵では**中央寄せ分だけ**になり、
+   * **{@link composeTransform} の先頭に置く**（発話演出の translate より前に来ないと、
+   * 演出のズレが中央寄せの基準を動かす）。
+   */
+  transforms: string[]
+}
+
+/** {@link Placement} を px の CSS 宣言 + translate 断片にする（出力CSS向け）。 */
+export function placementDecls(p: Placement): PositionParts {
+  const decl = (a: AxisPlacement) =>
+    `${a.prop}: ${a.fromCenter ? centerValue(a.distance) : px(a.distance)};`
+  const translate = (a: AxisPlacement) =>
+    a.translatePct === 0 ? null : `translate${a.axis}(${a.translatePct}%)`
+  return {
+    decls: [decl(p.x), decl(p.y)],
+    transforms: [translate(p.x), translate(p.y)].filter((t): t is string => t != null),
+  }
 }
 
 /** 文字の縁取り（8方向の text-shadow）。 */
@@ -336,7 +354,7 @@ function textOutline(color: string, width: number): string {
 
 /**
  * 名前ラベル `body::before` のブロック。名前が空、または `show` が false なら `null`（＝出力しない）。
- * 位置は**立ち絵と同じアンカー**からの距離で出す（{@link nameLabelPosition}）。
+ * 位置は**立ち絵と同じアンカー**からの距離で出す（{@link placeNameLabel}）。
  */
 function nameBlock(user: TachieUser, options: GenerateOptions): string | null {
   const label: NameLabel = options.nameLabel
@@ -360,12 +378,14 @@ function nameBlock(user: TachieUser, options: GenerateOptions): string | null {
   // 左アンカーなら左端合わせ＝002 と同じ挙動、右アンカーなら右端合わせ）。
   const shifted = hug && boxWidth != null
   const handleX = shifted ? ALIGN_HANDLE[label.align] : naturalHandleX(anchors.x)
-  const pos = nameLabelPosition(
-    anchors,
-    { x: left, y: bottom },
-    { dx: label.offsetX, dy: label.offsetY },
-    handleX,
-    boxWidth ?? 0,
+  const pos = placementDecls(
+    placeNameLabel(
+      anchors,
+      { x: left, y: bottom },
+      { dx: label.offsetX, dy: label.offsetY },
+      handleX,
+      boxWidth ?? 0,
+    ),
   )
   // ここも transform を出す箇所なので composeTransform を通す（→ 不変条件）。
   const transform = composeTransform(...pos.transforms)
@@ -515,8 +535,8 @@ export function generateStandaloneCss(user: TachieUser, options: GenerateOptions
   const effects = activeEffects(speak)
   // 位置はアンカー基準（未指定は左下＝従来の出力と一致）。中央寄せ分の translate はここで受け取り、
   // 静止時の transform と speak-jump の両方に**同じものを**渡す（→ composeTransform の不変条件）。
-  const pos = positionDecls(resolveAnchors(options), left, bottom)
-  const staticTransform = composeTransform(...pos.centering)
+  const pos = placementDecls(placeTachie(resolveAnchors(options), left, bottom))
+  const staticTransform = composeTransform(...pos.transforms)
 
   const afterDecls = [
     `  content: var(--img-stand-url-${id});`,
@@ -583,7 +603,7 @@ ${selectors.join(',\n')} {
     `${
       nameCss ? '/* Streamkit のアカウント名は隠す（名前は上のブロックで出す） */\n' : ''
     }[class*="Voice_name__"], [class*="Voice_user__"] {\n  display: none !important;\n}`,
-    ...keyframeBlocks(effects, speak, 'transform', pos.centering),
+    ...keyframeBlocks(effects, speak, 'transform', pos.transforms),
   )
 
   return parts.join('\n\n') + '\n'

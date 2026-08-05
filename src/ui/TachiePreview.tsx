@@ -1,11 +1,17 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import {
+  ALIGN_HANDLE,
   cssColorWithOpacity,
   flattenText,
+  naturalHandleX,
+  placeNameLabel,
+  placeTachie,
   safeColor,
   safeFontFamily,
+  type AxisPlacement,
+  type Placement,
 } from '../lib/generateCss'
-import type { Preset } from '../lib/types'
+import { resolveAnchors, type Preset } from '../lib/types'
 
 interface Props {
   /** プレビューに映すプリセット（見た目の source）。null なら空ビューポート。 */
@@ -28,6 +34,43 @@ const REF_W = 1920
 const REF_H = 1080
 /** 画像がまだ読めておらず幅も原寸指定のときの仮幅(px 相当)。 */
 const FALLBACK_WIDTH = 384
+
+/**
+ * 出力CSS の px を、プレビュー比率の長さにする（`cqw` = コンテナ幅の1%）。
+ * 文字サイズ・縁取り・跳ね高さのように**長さで効くもの**は、位置と同じくここを通さないと
+ * プレビューだけ実寸で描かれて出力と見え方がズレる。
+ */
+function cqw(v: number): string {
+  return `${(v / REF_W) * 100}cqw`
+}
+
+/**
+ * 出力CSS の {@link AxisPlacement} を、プレビュー比率（基準1920×1080 に対する %）の CSS 値にする。
+ * **座標の決め方は出力CSSと同じ関数（`placeTachie` / `placeNameLabel`）が持ち、
+ * ここは単位の付け替えだけ**をする（プレビューと出力がズレないように）。
+ */
+function axisValue(a: AxisPlacement): string {
+  const pct = Math.round((a.distance / (a.axis === 'X' ? REF_W : REF_H)) * 100 * 1000) / 1000
+  if (!a.fromCenter) return `${pct}%`
+  if (pct === 0) return '50%'
+  return `calc(50% ${pct > 0 ? '+' : '-'} ${Math.abs(pct)}%)`
+}
+
+/** 配置を位置プロパティ（`left`/`right`/`top`/`bottom`）の style にする。 */
+function placementStyle(p: Placement): CSSProperties {
+  return { [p.x.prop]: axisValue(p.x), [p.y.prop]: axisValue(p.y) } as CSSProperties
+}
+
+/**
+ * 配置の translate 断片（中央寄せ・帯の行揃え分）。translate の % は自分のサイズ基準なので、
+ * px か % かに関係なくそのまま使える。
+ */
+function placementTransform(p: Placement): string | undefined {
+  const parts = [p.x, p.y]
+    .filter((a) => a.translatePct !== 0)
+    .map((a) => `translate${a.axis}(${a.translatePct}%)`)
+  return parts.length > 0 ? parts.join(' ') : undefined
+}
 
 /**
  * OBS ビューポート風のプレビュー。透過市松背景に、プリセットの立ち絵を left/bottom/width で配置する。
@@ -61,9 +104,13 @@ export default function TachiePreview({
   const effectiveSpeaking = inCall && speaking
   // 幅は 明示指定 > 画像の実サイズ > 仮幅 の順。
   const effWidth = width ?? naturalW ?? FALLBACK_WIDTH
-  const leftPct = (left / REF_W) * 100
-  const bottomPct = (bottom / REF_H) * 100
   const widthPct = (effWidth / REF_W) * 100
+  // 位置は出力CSSと同じ関数で決める（未指定は左下）。
+  const anchors = resolveAnchors(preset ?? {})
+  const tachiePlace = placeTachie(anchors, left, bottom)
+  // 中央寄せ分の translate。跳ねの keyframe は transform を置換するので、変数で織り込む
+  // （出力CSS の `composeTransform` + keyframe への前置と同じ手当て）。
+  const centering = placementTransform(tachiePlace)
 
   const anims: string[] = []
   if (effectiveSpeaking && speak) {
@@ -84,13 +131,17 @@ export default function TachiePreview({
   const figStyle: CSSProperties = {
     // 立ち絵もビューポート基準の絶対配置にする（名前ラベルと同じ座標系。
     // 余白(padding)で寄せると % がその分だけ縮んだ幅に対して解決され、実寸とズレる）。
-    left: `${leftPct}%`,
-    bottom: `${bottomPct}%`,
+    ...placementStyle(tachiePlace),
     width: `${widthPct}%`,
-    ['--tp-jump' as string]: `${speak?.jumpPx ?? 0}px`,
+    transform: centering,
+    // 跳ねの keyframe が前置する中央寄せ分（無いときは無害な translateX(0)）。
+    ['--tp-center' as string]: centering ?? 'translateX(0)',
+    // 跳ね・縁取りは「長さ」なのでプレビュー比率へ落とす（実ピクセルのままだと
+    // プレビューだけ大きく見えて出力と食い違う）。
+    ['--tp-jump' as string]: cqw(speak?.jumpPx ?? 0),
     ['--tp-outline' as string]: speak?.outlineColor ?? '#FFFFFF',
     // generateCss と同じく w<=0 は 1px に丸める（プレビューと出力を一致させる）。
-    ['--tp-outline-w' as string]: `${Math.max(1, speak?.outlineWidth ?? 2)}px`,
+    ['--tp-outline-w' as string]: cqw(Math.max(1, speak?.outlineWidth ?? 2)),
     filter: dimmed ? 'brightness(0.5)' : undefined,
     animation: anims.length ? anims.join(', ') : undefined,
   }
@@ -105,25 +156,26 @@ export default function TachiePreview({
   const showLabel = (label?.show ?? false) && (cleanedName !== '' || usingSample)
   // 名前表示ONなのに名前が空＝出力に出ない、を気づけるようにする。
   const emptyNameWarning = (label?.show ?? false) && cleanedName === '' && !usingSample
-  // 文字サイズ・縁取り幅はビューポート幅に比例させる（cqw = コンテナ幅の1%）。
-  const cqw = (px: number) => `${(px / REF_W) * 100}cqw`
+  // 文字サイズ・縁取り幅はビューポート幅に比例させる（→ モジュール先頭の cqw）。
   // 行揃えの基準幅：明示指定 > 画像の実サイズ（出力CSSの箱幅と同じ決め方）。
   const nameBoxWidth = width ?? naturalW ?? undefined
   // 帯を文字幅に合わせるモードでは width を持たせず、transform で立ち絵に位置合わせする（出力CSSと同じ）。
   const hug = (label?.background ?? false) && label?.fit === 'text'
-  const anchor = hug && nameBoxWidth != null && label ? label.align : 'left'
-  const anchorShift =
-    anchor === 'center' ? (nameBoxWidth ?? 0) / 2 : anchor === 'right' ? (nameBoxWidth ?? 0) : 0
-  const nameStyle: CSSProperties = label
+  // 出力CSS（nameBlock）と同じ落としどころ：幅が分からないならアンカーの自然位置に寄せる。
+  const shifted = hug && nameBoxWidth != null
+  const namePlace = label
+    ? placeNameLabel(
+        anchors,
+        { x: left, y: bottom },
+        { dx: label.offsetX, dy: label.offsetY },
+        shifted ? ALIGN_HANDLE[label.align] : naturalHandleX(anchors.x),
+        nameBoxWidth ?? 0,
+      )
+    : null
+  const nameStyle: CSSProperties = label && namePlace
     ? {
-        left: `${((left + label.offsetX + anchorShift) / REF_W) * 100}%`,
-        bottom: `${((bottom + label.offsetY) / REF_H) * 100}%`,
-        transform:
-          anchor === 'center'
-            ? 'translateX(-50%)'
-            : anchor === 'right'
-              ? 'translateX(-100%)'
-              : undefined,
+        ...placementStyle(namePlace),
+        transform: placementTransform(namePlace),
         width: !hug && nameBoxWidth != null ? `${(nameBoxWidth / REF_W) * 100}%` : undefined,
         textAlign: !hug && nameBoxWidth != null ? label.align : undefined,
         boxSizing: 'border-box',
