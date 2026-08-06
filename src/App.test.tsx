@@ -199,6 +199,33 @@ describe('App', () => {
     expect(after).not.toContain('bottom:')
   })
 
+  it('クロップUIは画像があるときだけ出る（T8）', async () => {
+    render(<App />)
+
+    fireEvent.change(screen.getByLabelText('Discord ユーザーID'), {
+      target: { value: '123456789012345678' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '追加' }))
+
+    // 画像を入れる前は出さない（切り抜く対象が無い）
+    fireEvent.click(screen.getByRole('button', { name: /次へ/ }))
+    fireEvent.click(screen.getByRole('button', { name: /新規プリセット/ }))
+    expect(screen.queryByText('クロップ（切り抜き）')).not.toBeInTheDocument()
+
+    // 画像を入れると出る。canvas が無い環境では寸法が取れないので、操作は無効のまま
+    // （押して例外にならないこと＝縮退が効いていること。実際の切り抜きは実ブラウザで確認）。
+    fireEvent.click(screen.getByRole('button', { name: '画像URL' }))
+    fireEvent.change(screen.getByLabelText(/画像URL/), {
+      target: { value: 'data:image/png;base64,AAAA' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /画像URLを反映/ }))
+    expect(await screen.findByText(/画像を設定しました/)).toBeInTheDocument()
+
+    expect(screen.getByText('クロップ（切り抜き）')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '余白を詰める' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '範囲を指定して切り抜き' })).toBeDisabled()
+  })
+
   it('中央アンカーを選ぶと 50% + 中央寄せの transform が出る（T4）', async () => {
     render(<App />)
 

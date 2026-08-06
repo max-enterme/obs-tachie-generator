@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import CropEditor from './CropEditor'
 import { fileToDataUri, isWithinSizeLimit } from '../lib/image'
 import { resolveImageSource, type ImageSourceMode } from '../lib/imageSource'
 import {
@@ -287,6 +288,12 @@ export default function PresetPanel({
                 {error}
               </p>
             )}
+
+            {/* クロップは画像を差し替えるだけ（出力CSS の形は変わらない）。 */}
+            <CropEditor
+              imageUrl={editing.imageUrl}
+              onApply={(dataUrl) => set('imageUrl', dataUrl)}
+            />
 
             <div className="subhead">位置とサイズ</div>
             <div className="anchor-block">
