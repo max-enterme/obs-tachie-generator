@@ -25,6 +25,8 @@ specs/
 | 用途 | スキル |
 |---|---|
 | 新規プロジェクト立ち上げ / feature 雛形追加 | `/dashboard-scaffold` |
-| タスク 1 個を実装 → テスト → レビュー → PR | `/spec-implement` |
+| feature を動作確認できる状態まで実装 → テスト → レビュー → PR | `/spec-implement` |
 
-`/spec-implement` は plan.md の `test` が埋まっていることが前提。詳細は SPEC-OPS §05〜§08。
+`/spec-implement` は **feature 単位**(タスク 1 個ずつではない)。自動化できるタスクを塊に束ねて走り、
+人手・実機が要るタスクは飛ばして着地時にまとめて返す。plan.md の `test` が埋まっていることが前提。
+詳細は SPEC-OPS §05〜§08、§11。
