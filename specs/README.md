@@ -24,7 +24,7 @@ specs/
 
 | 用途 | スキル |
 |---|---|
-| 新規プロジェクト立ち上げ / feature 雛形追加 | `/dashboard-scaffold` |
+| 新規プロジェクト立ち上げ / feature 雛形追加 | `/spec-plan` |
 | feature を動作確認できる状態まで実装 → テスト → レビュー → PR | `/spec-implement` |
 
 `/spec-implement` は **feature 単位**(タスク 1 個ずつではない)。自動化できるタスクを塊に束ねて走り、
