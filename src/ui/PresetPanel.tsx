@@ -3,6 +3,9 @@ import { fileToDataUri, isWithinSizeLimit } from '../lib/image'
 import { resolveImageSource, type ImageSourceMode } from '../lib/imageSource'
 import {
   resetPresetOptions,
+  resolveAnchors,
+  type AnchorX,
+  type AnchorY,
   type NameAlign,
   type NameFit,
   type NameLabel,
@@ -26,6 +29,38 @@ const DEFAULT_MAX_WIDTH = 0
 
 /** 立ち絵画像の入力方式（排他）。 */
 type ImageInputMode = 'upload' | 'url'
+
+/** 3×3 のアンカー選択（画面の並びに合わせて 上→下 / 左→右）。 */
+const ANCHOR_ROWS: AnchorY[] = ['top', 'middle', 'bottom']
+const ANCHOR_COLS: AnchorX[] = ['left', 'center', 'right']
+
+const ANCHOR_LABEL: Record<AnchorY, Record<AnchorX, string>> = {
+  top: { left: '左上', center: '上中央', right: '右上' },
+  middle: { left: '左中央', center: '中央', right: '右中央' },
+  bottom: { left: '左下', center: '下中央', right: '右下' },
+}
+
+/** オフセット入力のラベル。「アンカーからの距離」なので、アンカーで意味が変わる。 */
+const OFFSET_X_LABEL: Record<AnchorX, string> = {
+  left: '左端からの距離(px)',
+  center: '横中央からのズレ(px)',
+  right: '右端からの距離(px)',
+}
+const OFFSET_Y_LABEL: Record<AnchorY, string> = {
+  bottom: '下端からの距離(px)',
+  middle: '縦中央からのズレ(px)',
+  top: '上端からの距離(px)',
+}
+/** 中央アンカーは「距離」ではなく符号付きのズレなので、向きを補足する。 */
+const OFFSET_X_HINT: Partial<Record<AnchorX, string>> = { center: '正で右' }
+const OFFSET_Y_HINT: Partial<Record<AnchorY, string>> = { middle: '正で上' }
+
+/** 名前が立ち絵のどの辺に付くか（縦は立ち絵の高さが取れないのでアンカー側の辺になる）。 */
+const NAME_EDGE: Record<AnchorY, string> = {
+  bottom: '立ち絵の下端から（正で上）',
+  middle: '立ち絵の縦中央から（正で上）',
+  top: '立ち絵の上端から（正で上）',
+}
 
 /**
  * 立ち絵・演出（プリセット）の作成/編集。上段2ブロック（左=一覧 / 右=画像＋オプション）。
@@ -67,6 +102,9 @@ export default function PresetPanel({
   // 測れていればそれを基準にできる（＝画像すら無い／読めないときだけ無効）。
   const alignBaseWidth = editing?.width ?? imageNaturalWidth ?? null
   const alignDisabled = alignBaseWidth == null
+
+  // アンカー（未指定は左下）。オフセットのラベルも名前の基準辺もここに追従する。
+  const anchors = resolveAnchors(editing ?? {})
 
   async function onFile(file: File | undefined) {
     if (!file || !editing) return
@@ -251,9 +289,51 @@ export default function PresetPanel({
             )}
 
             <div className="subhead">位置とサイズ</div>
+            <div className="anchor-block">
+              <div className="field" style={{ flex: '0 0 auto' }}>
+                <span id="pr-anchor-label" className="anchor-legend">
+                  基準の位置（アンカー）
+                </span>
+                <div
+                  className="anchor-grid"
+                  role="radiogroup"
+                  aria-labelledby="pr-anchor-label"
+                >
+                  {ANCHOR_ROWS.map((ay) =>
+                    ANCHOR_COLS.map((ax) => {
+                      const on = anchors.x === ax && anchors.y === ay
+                      return (
+                        <button
+                          key={`${ax}-${ay}`}
+                          type="button"
+                          className="anchor-cell"
+                          role="radio"
+                          aria-checked={on}
+                          data-on={on}
+                          title={ANCHOR_LABEL[ay][ax]}
+                          onClick={() => {
+                            if (!editing) return
+                            onChange({ ...editing, anchorX: ax, anchorY: ay })
+                          }}
+                        >
+                          <span className="sr-only">{ANCHOR_LABEL[ay][ax]}</span>
+                        </button>
+                      )
+                    }),
+                  )}
+                </div>
+              </div>
+              <p className="hint" style={{ margin: 0, flex: '1 1 160px' }}>
+                選んだ基準からの距離で位置を出します（{ANCHOR_LABEL[anchors.y][anchors.x]}）。
+                右・上・中央を選ぶと、OBS のキャンバス解像度を変えても端からの距離が保たれます。
+              </p>
+            </div>
             <div className="row">
               <div className="field">
-                <label htmlFor="pr-left">左端からの距離(px)</label>
+                <label htmlFor="pr-left">
+                  {OFFSET_X_LABEL[anchors.x]}
+                  {OFFSET_X_HINT[anchors.x] && <small>{OFFSET_X_HINT[anchors.x]}</small>}
+                </label>
                 <input
                   id="pr-left"
                   type="number"
@@ -262,7 +342,10 @@ export default function PresetPanel({
                 />
               </div>
               <div className="field">
-                <label htmlFor="pr-bottom">下端からの距離(px)</label>
+                <label htmlFor="pr-bottom">
+                  {OFFSET_Y_LABEL[anchors.y]}
+                  {OFFSET_Y_HINT[anchors.y] && <small>{OFFSET_Y_HINT[anchors.y]}</small>}
+                </label>
                 <input
                   id="pr-bottom"
                   type="number"
@@ -406,7 +489,7 @@ export default function PresetPanel({
                   <div className="field">
                     <label htmlFor="pr-name-x">
                       横位置(px)
-                      <small>立ち絵の左端から</small>
+                      <small>立ち絵に対して（正で右）</small>
                     </label>
                     <input
                       id="pr-name-x"
@@ -418,7 +501,7 @@ export default function PresetPanel({
                   <div className="field">
                     <label htmlFor="pr-name-y">
                       縦位置(px)
-                      <small>立ち絵の下端から（負で下）</small>
+                      <small>{NAME_EDGE[anchors.y]}</small>
                     </label>
                     <input
                       id="pr-name-y"

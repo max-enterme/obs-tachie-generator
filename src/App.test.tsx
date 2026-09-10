@@ -162,4 +162,66 @@ describe('App', () => {
 
     expect(await screen.findByLabelText('保存ペア1を呼び戻す')).toBeInTheDocument()
   })
+
+  it('3×3 のアンカー選択が出力CSSに反映され、オフセットのラベルが追従する（T4）', async () => {
+    render(<App />)
+
+    fireEvent.change(screen.getByLabelText('Discord ユーザーID'), {
+      target: { value: '123456789012345678' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '追加' }))
+    await addPresetWithImage('data:image/png;base64,AAAA')
+
+    // 既定は左下：ラベルも left/bottom
+    const group = screen.getByRole('radiogroup', { name: /基準の位置/ })
+    expect(within(group).getByRole('radio', { name: '左下' })).toBeChecked()
+    expect(screen.getByLabelText(/左端からの距離/)).toBeInTheDocument()
+    expect(screen.getByLabelText(/下端からの距離/)).toBeInTheDocument()
+
+    // 右上に切り替える
+    fireEvent.click(within(group).getByRole('radio', { name: '右上' }))
+    expect(within(group).getByRole('radio', { name: '右上' })).toBeChecked()
+    expect(within(group).getByRole('radio', { name: '左下' })).not.toBeChecked()
+
+    // オフセットのラベルがアンカーに追従する（「左端からの距離」は消える）
+    expect(screen.getByLabelText(/右端からの距離/)).toBeInTheDocument()
+    expect(screen.getByLabelText(/上端からの距離/)).toBeInTheDocument()
+    expect(screen.queryByLabelText(/左端からの距離/)).not.toBeInTheDocument()
+
+    // 出力CSSが right/top で出る（left/bottom は出ない）
+    fireEvent.click(screen.getByRole('button', { name: /次へ/ })) // ② → ③
+    const out = screen.getByRole('heading', { name: /出力 CSS/ }).closest('.panel')!
+    const textarea = within(out as HTMLElement).getByRole<HTMLTextAreaElement>('textbox')
+    const after = /body::after \{[\s\S]*?\n\}/.exec(textarea.value)?.[0] ?? ''
+    expect(after).toContain('right: 16px;')
+    expect(after).toContain('top: 16px;')
+    expect(after).not.toContain('left:')
+    expect(after).not.toContain('bottom:')
+  })
+
+  it('中央アンカーを選ぶと 50% + 中央寄せの transform が出る（T4）', async () => {
+    render(<App />)
+
+    fireEvent.change(screen.getByLabelText('Discord ユーザーID'), {
+      target: { value: '123456789012345678' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '追加' }))
+    await addPresetWithImage('data:image/png;base64,AAAA')
+
+    const group = screen.getByRole('radiogroup', { name: /基準の位置/ })
+    fireEvent.click(within(group).getByRole('radio', { name: '下中央' }))
+    // 中央は「距離」ではなく符号付きのズレなので、ラベルの文言も変わる
+    expect(screen.getByLabelText(/横中央からのズレ/)).toBeInTheDocument()
+    // ズレを 0 にすると calc を出さず 50% のまま
+    fireEvent.change(screen.getByLabelText(/横中央からのズレ/), { target: { value: '0' } })
+
+    fireEvent.click(screen.getByRole('button', { name: /次へ/ }))
+    const out = screen.getByRole('heading', { name: /出力 CSS/ }).closest('.panel')!
+    const textarea = within(out as HTMLElement).getByRole<HTMLTextAreaElement>('textbox')
+    const after = /body::after \{[\s\S]*?\n\}/.exec(textarea.value)?.[0] ?? ''
+    expect(after).toContain('left: 50%;')
+    expect(after).toContain('transform: translateX(-50%);')
+    // 中央寄せ + ぴょこぴょこ（既定ON）で keyframe に中央寄せ分が織り込まれる
+    expect(textarea.value).toContain('50% { transform: translateX(-50%) translateY(-10px); }')
+  })
 })

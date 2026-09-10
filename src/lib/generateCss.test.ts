@@ -188,6 +188,327 @@ describe('generateStandaloneCss (常時表示 / body::after)', () => {
   })
 })
 
+describe('アンカー (9通りの基準位置)', () => {
+  /** body::after ブロックだけを切り出す（発話ルールや keyframe を拾わないため）。 */
+  const afterBlock = (css: string): string => {
+    const m = /\nbody::after \{\n([\s\S]*?)\n\}/.exec(css)
+    if (!m) throw new Error('body::after ブロックが見つからない')
+    return m[1]
+  }
+
+  /** 位置に関わる宣言だけを行で拾う。 */
+  const positionLines = (css: string): string[] =>
+    afterBlock(css)
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => /^(left|right|top|bottom|transform):/.test(l))
+
+  const anchored = (anchorX: 'left' | 'center' | 'right', anchorY: 'top' | 'middle' | 'bottom') =>
+    generateStandaloneCss(USER_A, opts({ anchorX, anchorY, left: 40, bottom: 24 }))
+
+  // 9通り。「アンカーからの距離」がどの位置プロパティに出るか、中央寄せの translate が付くか。
+  const CASES: Array<{
+    x: 'left' | 'center' | 'right'
+    y: 'top' | 'middle' | 'bottom'
+    lines: string[]
+  }> = [
+    { x: 'left', y: 'bottom', lines: ['left: 40px;', 'bottom: 24px;'] },
+    { x: 'left', y: 'top', lines: ['left: 40px;', 'top: 24px;'] },
+    {
+      x: 'left',
+      y: 'middle',
+      lines: ['left: 40px;', 'bottom: calc(50% + 24px);', 'transform: translateY(50%);'],
+    },
+    { x: 'right', y: 'bottom', lines: ['right: 40px;', 'bottom: 24px;'] },
+    { x: 'right', y: 'top', lines: ['right: 40px;', 'top: 24px;'] },
+    {
+      x: 'right',
+      y: 'middle',
+      lines: ['right: 40px;', 'bottom: calc(50% + 24px);', 'transform: translateY(50%);'],
+    },
+    {
+      x: 'center',
+      y: 'bottom',
+      lines: ['left: calc(50% + 40px);', 'bottom: 24px;', 'transform: translateX(-50%);'],
+    },
+    {
+      x: 'center',
+      y: 'top',
+      lines: ['left: calc(50% + 40px);', 'top: 24px;', 'transform: translateX(-50%);'],
+    },
+    {
+      x: 'center',
+      y: 'middle',
+      lines: [
+        'left: calc(50% + 40px);',
+        'bottom: calc(50% + 24px);',
+        'transform: translateX(-50%) translateY(50%);',
+      ],
+    },
+  ]
+
+  for (const c of CASES) {
+    it(`${c.x} × ${c.y} の位置宣言`, () => {
+      expect(positionLines(anchored(c.x, c.y))).toEqual(c.lines)
+    })
+  }
+
+  it('未指定（保存済みの旧データ）は左下として読む', () => {
+    const legacy = opts({ left: 40, bottom: 24 })
+    delete legacy.anchorX
+    delete legacy.anchorY
+    expect(positionLines(generateStandaloneCss(USER_A, legacy))).toEqual([
+      'left: 40px;',
+      'bottom: 24px;',
+    ])
+    // 明示的な left/bottom 指定とバイト一致する（既定値の解決が1箇所であることの確認）。
+    expect(generateStandaloneCss(USER_A, legacy)).toBe(
+      generateStandaloneCss(USER_A, opts({ anchorX: 'left', anchorY: 'bottom', left: 40, bottom: 24 })),
+    )
+  })
+
+  it('ズレ 0 の中央は calc を出さず 50% のまま', () => {
+    const css = generateStandaloneCss(
+      USER_A,
+      opts({ anchorX: 'center', anchorY: 'middle', left: 0, bottom: 0 }),
+    )
+    expect(positionLines(css)).toEqual([
+      'left: 50%;',
+      'bottom: 50%;',
+      'transform: translateX(-50%) translateY(50%);',
+    ])
+  })
+
+  it('中央のズレは負で逆向き（calc の符号を出し分ける）', () => {
+    const css = generateStandaloneCss(
+      USER_A,
+      opts({ anchorX: 'center', anchorY: 'middle', left: -30, bottom: -12 }),
+    )
+    expect(css).toContain('left: calc(50% - 30px);')
+    expect(css).toContain('bottom: calc(50% - 12px);')
+  })
+
+  it('幅が原寸（width 未指定）でも中央寄せが成立する（自分のサイズ半分を戻すため）', () => {
+    const css = generateStandaloneCss(
+      USER_A,
+      opts({ anchorX: 'center', left: 0, width: undefined }),
+    )
+    expect(css).toContain('left: 50%;')
+    expect(css).toContain('transform: translateX(-50%);')
+    expect(css).not.toContain('width:')
+  })
+
+  it('左下（既定）では transform を出さない', () => {
+    expect(afterBlock(generateStandaloneCss(USER_A, opts()))).not.toContain('transform')
+  })
+})
+
+describe('transform の衝突（中央寄せ × 発話演出）', () => {
+  it('中央寄せ + ぴょこぴょこで keyframe に中央寄せ分を織り込む（立ち絵が飛ばない）', () => {
+    const css = generateStandaloneCss(
+      USER_A,
+      opts({ anchorX: 'center', left: 0, speak: { bounce: true, jumpPx: 12 } }),
+    )
+    expect(css).toContain(`@keyframes speak-jump {
+  0% { transform: translateX(-50%) translateY(0); }
+  50% { transform: translateX(-50%) translateY(-12px); }
+  100% { transform: translateX(-50%) translateY(0); }
+}`)
+  })
+
+  it('中央 × 中央 + ぴょこぴょこは縦横どちらの中央寄せも保つ', () => {
+    const css = generateStandaloneCss(
+      USER_A,
+      opts({ anchorX: 'center', anchorY: 'middle', left: 0, bottom: 0, speak: { jumpPx: 8 } }),
+    )
+    expect(css).toContain('50% { transform: translateX(-50%) translateY(50%) translateY(-8px); }')
+    // 静止時とアニメで同じ中央寄せ断片を使う（片方だけ直す事故を防ぐ）。
+    expect(css).toContain('transform: translateX(-50%) translateY(50%);')
+  })
+
+  it('左下（中央寄せなし）の keyframe は従来どおり translateY だけ', () => {
+    const css = generateStandaloneCss(USER_A, opts({ speak: { jumpPx: 10 } }))
+    expect(css).toContain(`@keyframes speak-jump {
+  0% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+  100% { transform: translateY(0); }
+}`)
+  })
+
+  it('名前帯のアンカーも同じ合成関数を通す（帯の translate が単独で出る）', () => {
+    const css = generateStandaloneCss(
+      USER_A,
+      nameOn({ background: true, fit: 'text', align: 'center' }, { width: 400 }),
+    )
+    expect(css).toMatch(/body::before \{[^}]*transform: translateX\(-50%\);/)
+  })
+
+  it('名前帯が左寄せなら transform を出さない（空の合成は宣言を出さない）', () => {
+    const css = generateStandaloneCss(
+      USER_A,
+      nameOn({ background: true, fit: 'text', align: 'left' }, { width: 400 }),
+    )
+    const before = /body::before \{([^}]*)\}/.exec(css)?.[1] ?? ''
+    expect(before).not.toContain('transform')
+  })
+})
+
+describe('名前ラベルのアンカー追従 (T9)', () => {
+  /** body::before の位置に関わる宣言だけを行で拾う。 */
+  const namePositionLines = (css: string): string[] => {
+    const m = /\nbody::before \{\n([\s\S]*?)\n\}/.exec(css)
+    if (!m) throw new Error('body::before ブロックが見つからない')
+    return m[1]
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => /^(left|right|top|bottom|transform):/.test(l))
+  }
+
+  // 立ち絵は「アンカーからの距離 40 / 24」、名前は「立ち絵に対して右へ10・下へ8」。
+  const TACHIE = { left: 40, bottom: 24 }
+  const OFFSET = { offsetX: 10, offsetY: -8 }
+
+  const named = (
+    anchorX: 'left' | 'center' | 'right',
+    anchorY: 'top' | 'middle' | 'bottom',
+    over: Partial<NameLabel> = {},
+    rest: OptionsOverride = {},
+  ) => generateStandaloneCss(USER_A, nameOn({ ...OFFSET, ...over }, { ...TACHIE, ...rest, anchorX, anchorY }))
+
+  describe('オフセットの符号（アンカー基準の距離に直す）', () => {
+    it('左アンカーは足す（従来どおり）', () => {
+      expect(namePositionLines(named('left', 'bottom', {}, { width: 400 }))).toEqual([
+        'left: 50px;', // 40 + 10
+        'bottom: 16px;', // 24 + (-8)
+      ])
+    })
+
+    it('**右アンカーでは offsetX の符号が反転する**（右端からの距離が減る）', () => {
+      expect(namePositionLines(named('right', 'bottom', {}, { width: 400 }))).toEqual([
+        'right: 30px;', // 40 - 10
+        'bottom: 16px;',
+      ])
+    })
+
+    it('**上アンカーでは offsetY の符号が反転する**（上端からの距離が増える＝下へ）', () => {
+      expect(namePositionLines(named('left', 'top', {}, { width: 400 }))).toEqual([
+        'left: 50px;',
+        'top: 32px;', // 24 - (-8)
+      ])
+    })
+
+    it('縦中央は下基準のまま（正の offsetY = 上）', () => {
+      expect(namePositionLines(named('left', 'middle', {}, { width: 400 }))).toEqual([
+        'left: 50px;',
+        'bottom: calc(50% + 16px);',
+        'transform: translateY(50%);',
+      ])
+    })
+  })
+
+  describe('帯を文字幅に合わせるモード（行揃えぶん掴み位置をずらす）', () => {
+    const hug: Partial<NameLabel> = { background: true, fit: 'text' }
+
+    it('左アンカー × 行揃え（従来どおり 立ち絵の幅を足して自分のサイズで戻す）', () => {
+      expect(namePositionLines(named('left', 'bottom', { ...hug, align: 'left' }, { width: 400 }))).toEqual([
+        'left: 50px;',
+        'bottom: 16px;',
+      ])
+      expect(namePositionLines(named('left', 'bottom', { ...hug, align: 'center' }, { width: 400 }))).toEqual([
+        'left: 250px;', // 50 + 400/2
+        'bottom: 16px;',
+        'transform: translateX(-50%);',
+      ])
+      expect(namePositionLines(named('left', 'bottom', { ...hug, align: 'right' }, { width: 400 }))).toEqual([
+        'left: 450px;', // 50 + 400
+        'bottom: 16px;',
+        'transform: translateX(-100%);',
+      ])
+    })
+
+    it('**右アンカーでは行揃えの translate も向きが反転する**', () => {
+      // 右端合わせ＝アンカーの自然位置なので、立ち絵の幅も translate も出てこない。
+      expect(namePositionLines(named('right', 'bottom', { ...hug, align: 'right' }, { width: 400 }))).toEqual([
+        'right: 30px;',
+        'bottom: 16px;',
+      ])
+      expect(namePositionLines(named('right', 'bottom', { ...hug, align: 'center' }, { width: 400 }))).toEqual([
+        'right: 230px;', // 30 + 400/2
+        'bottom: 16px;',
+        'transform: translateX(50%);', // 左アンカーの -50% と逆向き
+      ])
+      expect(namePositionLines(named('right', 'bottom', { ...hug, align: 'left' }, { width: 400 }))).toEqual([
+        'right: 430px;', // 30 + 400
+        'bottom: 16px;',
+        'transform: translateX(100%);', // 左アンカーの -100% と逆向き
+      ])
+    })
+
+    it('中央アンカー × 中央揃えは立ち絵の幅が要らない（掴み位置が自然位置と同じ）', () => {
+      expect(namePositionLines(named('center', 'bottom', { ...hug, align: 'center' }, { width: 400 }))).toEqual([
+        'left: calc(50% + 50px);', // 40 + 10
+        'bottom: 16px;',
+        'transform: translateX(-50%);',
+      ])
+    })
+
+    it('中央アンカー × 左右揃えは立ち絵の幅で半分ずらす', () => {
+      expect(namePositionLines(named('center', 'bottom', { ...hug, align: 'left' }, { width: 400 }))).toEqual([
+        'left: calc(50% - 150px);', // 50 - 400/2
+        'bottom: 16px;',
+      ])
+      expect(namePositionLines(named('center', 'bottom', { ...hug, align: 'right' }, { width: 400 }))).toEqual([
+        'left: calc(50% + 250px);', // 50 + 400/2
+        'bottom: 16px;',
+        'transform: translateX(-100%);',
+      ])
+    })
+
+    it('立ち絵の幅が分からないときはアンカーの自然位置に落とす（幅なしで成立する唯一の選択）', () => {
+      // width 未指定 + 実測なし → 行揃えは効かせられない。
+      const right = named('right', 'bottom', { ...hug, align: 'center' }, { width: undefined })
+      expect(namePositionLines(right)).toEqual(['right: 30px;', 'bottom: 16px;'])
+      const left = named('left', 'bottom', { ...hug, align: 'center' }, { width: undefined })
+      expect(namePositionLines(left)).toEqual(['left: 50px;', 'bottom: 16px;'])
+      const center = named('center', 'bottom', { ...hug, align: 'left' }, { width: undefined })
+      expect(namePositionLines(center)).toEqual([
+        'left: calc(50% + 50px);',
+        'bottom: 16px;',
+        'transform: translateX(-50%);',
+      ])
+    })
+  })
+
+  it('立ち絵と名前が同じアンカーの位置プロパティを使う（逆側に出ない）', () => {
+    const css = named('right', 'top', {}, { width: 400 })
+    // 両方 right/top 基準。片方だけ left/bottom で焼かれていたら画面の逆側に出る。
+    expect(css).toMatch(/body::after \{[^}]*right: 40px;[^}]*top: 24px;/)
+    expect(css).toMatch(/body::before \{[^}]*right: 30px;[^}]*top: 32px;/)
+    expect(css).not.toMatch(/body::before \{[^}]*\bleft:/)
+  })
+
+  it('実測幅の注記は、実際に幅を使ったときだけ出す', () => {
+    const usesWidth = generateStandaloneCss(
+      USER_A,
+      nameOn(
+        { ...OFFSET, background: true, fit: 'text', align: 'left' },
+        { ...TACHIE, anchorX: 'right', anchorY: 'bottom', width: undefined, imageNaturalWidth: 400 },
+      ),
+    )
+    expect(usesWidth).toContain('位置合わせの基準幅 400px は立ち絵画像の実サイズ')
+
+    // 右アンカー × 右端合わせは幅が要らない → 注記を出さない
+    const noWidth = generateStandaloneCss(
+      USER_A,
+      nameOn(
+        { ...OFFSET, background: true, fit: 'text', align: 'right' },
+        { ...TACHIE, anchorX: 'right', anchorY: 'bottom', width: undefined, imageNaturalWidth: 400 },
+      ),
+    )
+    expect(noWidth).not.toContain('位置合わせの基準幅')
+  })
+})
+
 describe('名前表示 (body::before / 任意テキスト)', () => {
   it('既定（表示OFF）では body::before を出さない', () => {
     const css = generateStandaloneCss(USER_A, opts())
