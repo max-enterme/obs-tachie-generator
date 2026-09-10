@@ -505,9 +505,11 @@ describe('名前表示 (body::before / 任意テキスト)', () => {
 
 describe('名前OFF の出力（001 からの非退行）', () => {
   it('演出なし・名前OFF の出力が期待どおりの文字列と一致する', () => {
+    // 距離は 001 当時の既定（16/16）を明示的に渡す。ここは「001 の出力と一致するか」を
+    // 固定する場所なので、**今の既定値には追随させない**（既定は後から変わりうる）。
     const css = generateStandaloneCss(
       USER_A,
-      opts({ speak: { bounce: false, outline: false, blink: false } }),
+      opts({ left: 16, bottom: 16, speak: { bounce: false, outline: false, blink: false } }),
     )
     expect(css).toBe(
       `:root {

@@ -23,6 +23,11 @@ describe('アンカーの解決', () => {
     expect(DEFAULT_ANCHOR_Y).toBe('bottom')
   })
 
+  it('アンカーからの距離の既定は 0（＝アンカーにぴったり付ける。位置合わせは OBS 側でやる）', () => {
+    expect(DEFAULT_OPTIONS.left).toBe(0)
+    expect(DEFAULT_OPTIONS.bottom).toBe(0)
+  })
+
   it('未指定（undefined）は既定へ倒れる', () => {
     expect(resolveAnchorX(undefined)).toBe('left')
     expect(resolveAnchorY(undefined)).toBe('bottom')
