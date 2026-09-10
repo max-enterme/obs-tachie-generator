@@ -555,6 +555,137 @@ button:disabled {
   cursor: not-allowed;
 }
 
+/* ===== Anchor picker (3x3) ===== */
+.anchor-block {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.anchor-legend {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+/* 画面の並びをそのまま写す（上段=上アンカー / 左列=左アンカー）ので、
+   どこに立ち絵が寄るかが一目で分かる。 */
+.anchor-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 26px);
+  grid-template-rows: repeat(3, 26px);
+  gap: 4px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-2);
+  width: max-content;
+}
+
+.anchor-cell {
+  border: 1px solid var(--line-2);
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  position: relative;
+}
+
+.anchor-cell:hover {
+  border-color: var(--accent);
+}
+
+.anchor-cell[data-on='true'] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 34%, transparent);
+}
+
+/* 選択中のセルに、寄せる向きが分かる点を出す。 */
+.anchor-cell[data-on='true']::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.anchor-cell:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* スクリーンリーダー専用（見た目は消すが読み上げには残す）。 */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ===== Crop editor ===== */
+.crop-edit {
+  margin-bottom: 10px;
+}
+
+/* 画像をフィット表示して、その上に切り抜き枠を重ねる（枠は画像に対する % で置く）。 */
+.crop-stage {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  margin-bottom: 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  cursor: crosshair;
+  touch-action: none; /* ドラッグ中にスクロールへ取られない */
+  /* 透過を示す市松模様（余白の有無が見えないと「詰める」の意味が分からない） */
+  background-color: #2a2f3a;
+  background-image: linear-gradient(45deg, #3a4150 25%, transparent 25%),
+    linear-gradient(-45deg, #3a4150 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #3a4150 75%),
+    linear-gradient(-45deg, transparent 75%, #3a4150 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+}
+
+.crop-stage img {
+  display: block;
+  max-width: 100%;
+  max-height: 260px;
+  width: auto;
+  height: auto;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.crop-box {
+  position: absolute;
+  border: 2px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  pointer-events: none;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
+}
+
+/* 破壊的な操作なので、確認は目立つ枠で出す（見落として押し切られないように）。 */
+.crop-confirm {
+  border: 1px solid var(--warn);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
+}
+
 /* ===== Preset list & editor ===== */
 .preset-list {
   display: flex;
@@ -958,15 +1089,17 @@ textarea.css-out {
   pointer-events: none;
 }
 
+/* 跳ね。keyframe の transform は要素の transform を丸ごと置き換えるので、
+   中央寄せ分（--tp-center）を各ステップに前置する（出力CSS の speak-jump と同じ手当て）。 */
 @keyframes tachie-preview-jump {
   0% {
-    transform: translateY(0);
+    transform: var(--tp-center, translateX(0)) translateY(0);
   }
   50% {
-    transform: translateY(calc(-1 * var(--tp-jump, 10px)));
+    transform: var(--tp-center, translateX(0)) translateY(calc(-1 * var(--tp-jump, 10px)));
   }
   100% {
-    transform: translateY(0);
+    transform: var(--tp-center, translateX(0)) translateY(0);
   }
 }
 

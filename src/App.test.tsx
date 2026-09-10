@@ -162,4 +162,98 @@ describe('App', () => {
 
     expect(await screen.findByLabelText('保存ペア1を呼び戻す')).toBeInTheDocument()
   })
+
+  it('3×3 のアンカー選択が出力CSSに反映され、オフセットのラベルが追従する（T4）', async () => {
+    render(<App />)
+
+    fireEvent.change(screen.getByLabelText('Discord ユーザーID'), {
+      target: { value: '123456789012345678' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '追加' }))
+    await addPresetWithImage('data:image/png;base64,AAAA')
+
+    // 既定は左下：ラベルも left/bottom
+    const group = screen.getByRole('radiogroup', { name: /基準の位置/ })
+    expect(within(group).getByRole('radio', { name: '左下' })).toBeChecked()
+    expect(screen.getByLabelText(/左端からの距離/)).toBeInTheDocument()
+    expect(screen.getByLabelText(/下端からの距離/)).toBeInTheDocument()
+
+    // 右上に切り替える
+    fireEvent.click(within(group).getByRole('radio', { name: '右上' }))
+    expect(within(group).getByRole('radio', { name: '右上' })).toBeChecked()
+    expect(within(group).getByRole('radio', { name: '左下' })).not.toBeChecked()
+
+    // オフセットのラベルがアンカーに追従する（「左端からの距離」は消える）
+    expect(screen.getByLabelText(/右端からの距離/)).toBeInTheDocument()
+    expect(screen.getByLabelText(/上端からの距離/)).toBeInTheDocument()
+    expect(screen.queryByLabelText(/左端からの距離/)).not.toBeInTheDocument()
+
+    // 距離は明示的に入れる。ここで見たいのは「right/top で出るか」であって既定値ではないので、
+    // 既定が変わってもこのテストの意味が変わらないようにする。
+    fireEvent.change(screen.getByLabelText(/右端からの距離/), { target: { value: '16' } })
+    fireEvent.change(screen.getByLabelText(/上端からの距離/), { target: { value: '16' } })
+
+    // 出力CSSが right/top で出る（left/bottom は出ない）
+    fireEvent.click(screen.getByRole('button', { name: /次へ/ })) // ② → ③
+    const out = screen.getByRole('heading', { name: /出力 CSS/ }).closest('.panel')!
+    const textarea = within(out as HTMLElement).getByRole<HTMLTextAreaElement>('textbox')
+    const after = /body::after \{[\s\S]*?\n\}/.exec(textarea.value)?.[0] ?? ''
+    expect(after).toContain('right: 16px;')
+    expect(after).toContain('top: 16px;')
+    expect(after).not.toContain('left:')
+    expect(after).not.toContain('bottom:')
+  })
+
+  it('クロップUIは画像があるときだけ出る（T8）', async () => {
+    render(<App />)
+
+    fireEvent.change(screen.getByLabelText('Discord ユーザーID'), {
+      target: { value: '123456789012345678' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '追加' }))
+
+    // 画像を入れる前は出さない（切り抜く対象が無い）
+    fireEvent.click(screen.getByRole('button', { name: /次へ/ }))
+    fireEvent.click(screen.getByRole('button', { name: /新規プリセット/ }))
+    expect(screen.queryByText('クロップ（切り抜き）')).not.toBeInTheDocument()
+
+    // 画像を入れると出る。canvas が無い環境では寸法が取れないので、操作は無効のまま
+    // （押して例外にならないこと＝縮退が効いていること。実際の切り抜きは実ブラウザで確認）。
+    fireEvent.click(screen.getByRole('button', { name: '画像URL' }))
+    fireEvent.change(screen.getByLabelText(/画像URL/), {
+      target: { value: 'data:image/png;base64,AAAA' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /画像URLを反映/ }))
+    expect(await screen.findByText(/画像を設定しました/)).toBeInTheDocument()
+
+    expect(screen.getByText('クロップ（切り抜き）')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '余白を詰める' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '範囲を指定して切り抜き' })).toBeDisabled()
+  })
+
+  it('中央アンカーを選ぶと 50% + 中央寄せの transform が出る（T4）', async () => {
+    render(<App />)
+
+    fireEvent.change(screen.getByLabelText('Discord ユーザーID'), {
+      target: { value: '123456789012345678' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '追加' }))
+    await addPresetWithImage('data:image/png;base64,AAAA')
+
+    const group = screen.getByRole('radiogroup', { name: /基準の位置/ })
+    fireEvent.click(within(group).getByRole('radio', { name: '下中央' }))
+    // 中央は「距離」ではなく符号付きのズレなので、ラベルの文言も変わる
+    expect(screen.getByLabelText(/横中央からのズレ/)).toBeInTheDocument()
+    // ズレを 0 にすると calc を出さず 50% のまま
+    fireEvent.change(screen.getByLabelText(/横中央からのズレ/), { target: { value: '0' } })
+
+    fireEvent.click(screen.getByRole('button', { name: /次へ/ }))
+    const out = screen.getByRole('heading', { name: /出力 CSS/ }).closest('.panel')!
+    const textarea = within(out as HTMLElement).getByRole<HTMLTextAreaElement>('textbox')
+    const after = /body::after \{[\s\S]*?\n\}/.exec(textarea.value)?.[0] ?? ''
+    expect(after).toContain('left: 50%;')
+    expect(after).toContain('transform: translateX(-50%);')
+    // 中央寄せ + ぴょこぴょこ（既定ON）で keyframe に中央寄せ分が織り込まれる
+    expect(textarea.value).toContain('50% { transform: translateX(-50%) translateY(-10px); }')
+  })
 })

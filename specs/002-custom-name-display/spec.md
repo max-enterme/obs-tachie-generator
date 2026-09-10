@@ -3,7 +3,7 @@ feature: custom-name-display
 issue: 20
 release: r2
 priority: should
-status: レビュー
+status: 完了
 ---
 
 # 立ち絵に任意の名前を表示する
@@ -61,7 +61,7 @@ status: レビュー
 - [x] 色・フォント名に不正値を入れても CSS 注入にならない(安全側に倒す)
 - [x] プレビューに名前が出て、位置・サイズ・縁取りが実出力と一致する
 - [x] 既存プリセット(nameLabel を持たない localStorage)を読んでも壊れず、既定は表示OFF
-- [ ] OBS 実機に貼って、名前が意図どおり出る(§08 実機確認・T8)
+- [x] OBS 実機に貼って、名前が意図どおり出る(§08 実機確認・T8)
 
 ## メモ / 降りる箇所
 - **描画枠の上限**: 立ち絵=`body::after` / 名前=`body::before` で、**1ソースあたり擬似要素は使い切る**。

@@ -17,32 +17,80 @@ test: npm run typecheck && npm run lint && npx vitest run
   | anchorX | 出力 |
   |---|---|
   | `left` | `left: <X>px;` |
-  | `center` | `left: 50%;` + translate に `-50%` |
+  | `center` | `left: calc(50% + <X>px);` + translate に `-50%`（X=0 なら `left: 50%;`） |
   | `right` | `right: <X>px;` |
 
-  縦も同様(`top` / `top: 50%` + `-50%` / `bottom`)。
+  縦も同様。ただし **縦の中央は `top` ではなく `bottom` 基準**にする(T2 実装時に確定):
+  `bottom: calc(50% + <Y>px)` + `translateY(50%)`。`bottom` アンカーと同じく **「正の Y = 上」を保つ**ため
+  (`top` 基準にすると中央アンカーだけオフセットの符号が反転して事故る)。
+- **中央寄せのズレ量は位置側(`calc`)に載せ、`transform` は「中央寄せ分」だけに保つ**(T2 実装時に確定)。
+  当初は translate 側に `calc(-50% + <X>px)` を書く形で考えていたが、それだと「中央寄せ分」と
+  「オフセット分」が transform の中で混ざり、発話演出・名前帯の translate と合成したときに
+  どの断片が何なのか追えなくなる。位置側に寄せると transform は常に定数(`translateX(-50%)` /
+  `translateY(50%)`)になり、合成が単なる連結で済む。
 - **`transform` の一元管理**を入れる。中央寄せの `translate` と発話演出の `translateY` を別々に書くと後勝ちで壊れるため、
   「中央寄せ分の translate」を返す小さな純粋関数を作り、`body::after` の静止時 `transform` と
   `@keyframes speak-jump` の**両方が同じ関数の結果を前置**する形にする(spec の案1)。
   **`transform` を出す箇所は3つある**(002 マージ後の実測): ①立ち絵の静止時 ②`@keyframes speak-jump`
   ③名前ラベル `body::before` の帯アンカー(`translateX(-50%)` / `translateX(-100%)`,
   [`generateCss.ts:181`](../../src/lib/generateCss.ts))。**この3つを1つの合成関数に通す**のが不変条件。
+  → T3 で `composeTransform(...parts)` に一本化済み(空なら宣言を出さない)。
+  `positionDecls` が返す `centering` を**静止時と `speak-jump` の両方が前置する**形にした。
 
 ### 名前ラベル(002)のアンカー追従
 - 現状の `nameBlock` は `left: <立ち絵のleft + offsetX + 帯補正>px` / `bottom: <立ち絵のbottom + offsetY>px` を
   数値で焼く([`generateCss.ts:180`](../../src/lib/generateCss.ts))。**左下基準の座標系に固定**されている。
-- 立ち絵の位置生成を `positionDecls(options)` に切り出すとき、**名前ラベルも同じ関数を通す**。
-  名前側は「立ち絵の位置 + オフセット」なので、`positionDecls` を
-  **「アンカー + オフセット量 → 位置宣言 + transform 断片」を返す形**にしておけば両方から呼べる。
+- 立ち絵の位置生成を `positionDecls(anchors, x, y)` に切り出したので(T2 完了)、**名前ラベルも同じ軸ロジックを通す**
+  (T9 完了)。1軸ぶんを作る内部関数 `axisParts(spec, distance, offset, handle, boxSize)` に
+  **座標系の分岐を全部閉じた**。公開の入口は 立ち絵用 `positionDecls` と 名前用 `nameLabelPosition`。
+- 軸の性質(`AxisSpec`)は アンカー → `{ 位置プロパティ, 中央か, translate 軸, 自然な掴み位置 }`。
+  **掴み位置(handle)は「自分のどこを合わせるか」を画面座標の割合で持つ**
+  (横 0 = 左端 / 1 = 右端、縦 0 = 下端 / 1 = 上端)。立ち絵は常に自然位置なので `boxSize` が消え、
+  返る translate は中央寄せ分だけになる(＝`speak-jump` に前置して安全)。
+- 1本の式にまとまった:
+  `D = 距離 + (符号反転?−1:+1)×ズレ + (掴み位置 − 自然位置)×立ち絵の幅` / `translate = ±掴み位置×100%`
 
-  | anchorX | 立ち絵 | 名前(オフセット `dx`) |
+  | anchorX | 立ち絵 | 名前(画面座標のズレ `dx`。正で右。帯の幅 `w`) |
   |---|---|---|
-  | `left` | `left: X px` | `left: (X + dx) px` |
-  | `right` | `right: X px` | `right: (X − dx) px` ※ dx の符号が反転する |
-  | `center` | `left: 50%` + `translateX(-50%)` | `left: 50%` + `translateX(calc(-50% + dx px))` |
+  | `left` | `left: X px` | 左揃え `left: (X+dx) px` / 中央 `left: (X+dx+w/2) px` + `translateX(-50%)` / 右 `left: (X+dx+w) px` + `translateX(-100%)` |
+  | `right` | `right: X px` | 右揃え `right: (X−dx) px` / 中央 `right: (X−dx+w/2) px` + `translateX(50%)` / 左 `right: (X−dx+w) px` + `translateX(100%)` |
+  | `center` | `left: calc(50% + X px)` + `translateX(-50%)` | 中央 `left: calc(50% + (X+dx) px)` + `translateX(-50%)` / 左 `−w/2` / 右 `+w/2` + `translateX(-100%)` |
 
   **右アンカーでオフセットの符号が反転する**のが事故りやすい箇所。「名前を立ち絵より右にずらす」は
-  右アンカーでは `right` を減らす方向になる。ここは vitest で固定する。
+  右アンカーでは `right` を減らす方向になる。縦も同じで、**`top` アンカーでは `dy` が反転する**
+  (`bottom` / `middle` は「正の dy = 上」で反転しない)。
+  **帯の行揃えの translate も右アンカーでは符号が反転する**(`right: D` に対する `translateX(-100%)` は
+  右端からの距離を**増やす**方向なので、左下基準と同じ符号では成立しない)。ここは vitest + 実ブラウザ実測で固定した。
+- **帯の幅が分からないとき(幅が原寸 かつ 実測なし)は、行揃えをアンカーの自然位置に落とす。**
+  幅なしで成立する唯一の選択。左アンカーなら左端合わせ(＝002 と同じ挙動)、右アンカーなら右端合わせ。
+### プレビューとの共有(T5 実装時に確定)
+- 座標の決め方は `placeTachie` / `placeNameLabel` が**素の数値**(`AxisPlacement`)で返し、
+  出力CSS は px、プレビューは基準1920×1080 に対する % に**単位だけ付け替える**。
+  座標の分岐がプレビュー側に写ると、必ずどちらかが先に腐る。
+- プレビューの跳ねも keyframe で `transform` を置換するので、**出力CSS と同じ手当て**が要る。
+  CSS 変数 `--tp-center` に中央寄せ分を入れ、keyframe の各ステップが前置する。
+- **T5 で見つけた別件の齟齬も直した**: 跳ね高さ・縁取り幅がプレビューだけ実ピクセルのままで、
+  位置や文字サイズ(`cqw`)と違ってプレビュー比率にスケールしていなかった
+  (10px の跳ねが実測 18.3px 相当に見えていた)。`cqw` を通す形に揃えた。
+  ※ 001/002 からの持ち越しで、アンカーとは無関係。同じファイルの「プレビューと出力を一致させる」
+  方針から外れていたため T5 の中で直した。
+
+### UI(T4 実装時に確定)
+- 3×3 は `role="radiogroup"` + `role="radio"` のボタン格子。**画面の並びをそのまま写す**
+  (上段 = 上アンカー / 左列 = 左アンカー)ので、どこに寄るかが一目で分かる。
+- オフセットのラベルはアンカーに追従: 端アンカーは「〜端からの距離(px)」、
+  中央アンカーは**「距離」ではなく符号付きのズレ**なので「横中央からのズレ(px)」+ 補足「正で右」。
+- 名前の縦位置ラベルも追従(「立ち絵の下端から」⇄「上端から」⇄「縦中央から」)。
+  横位置は画面座標のズレなので**アンカーに依らず「立ち絵に対して(正で右)」**に統一した
+  (旧「立ち絵の左端から」は右アンカーで嘘になる)。
+- **§10 のモック併置はしていない。** 003 の spec を書いた時点でモックを置いておらず、
+  着手時点では spec/plan の記述が確定値だった。UI が小さい(格子 + ラベル文言)ため実装で確定させたが、
+  002 の記録と同じ取りこぼしであり、**次の GUI feature では spec 作成時に併置する**。
+
+- **縦は掴み位置を動かさない。** 立ち絵の描画後の高さは CSS から取れないため
+  (`imageNaturalWidth` に相当する高さを持っていない)。結果として名前は**立ち絵のアンカー側の辺**に付く:
+  下アンカーなら足元、上アンカーなら頭側、縦中央なら立ち絵の中央。
+  上アンカーで足元に置きたい場合は `offsetY` を人が入れる必要がある(高さの焼き込みは別 feature)。
 
 ### クロップ
 - **CSS には一切出さない。** 取り込み済み画像を canvas で切り抜き、結果の data URI で `Preset.imageUrl` を
@@ -61,8 +109,19 @@ test: npm run typecheck && npm run lint && npx vitest run
   明示的に返す。しきい値は既定 `alpha <= 0`(完全透明のみ)。
 - 出力は **PNG 固定**(透過保持)。切り抜き後の再リサイズはしない。
 - UI は PresetPanel の画像ブロックに置く。「余白を詰める」ボタン(自動)と「範囲を指定して切り抜き」
-  (プレビュー上のドラッグ + `x`/`y`/`幅`/`高さ` の数値入力)の2経路。適用は確認を挟み、
+  (ドラッグ + `x`/`y`/`幅`/`高さ` の数値入力)の2経路。適用は確認を挟み、
   **元に戻せない**旨をその場に出す。
+- **確認はブラウザの `confirm()` ではなくパネル内の2段階ボタン**(T8 実装時に確定・ユーザー選択)。
+  OBS の内蔵ブラウザなど `confirm()` が抑止される環境があるうえ、
+  **切り抜き後の寸法と埋め込みサイズをその場で見せたい**ため(PNG 固定なので元が JPEG/WebP だと増えうる)。
+- **確認段階では「実際に切り抜いた結果」を持つ。** ボタンを押した時点で canvas を通し、
+  data URI を握ったまま確認を出す。見せている数値と適用されるものが必ず一致する
+  (見積りを別計算すると必ずズレる)。「やめる」なら捨てるだけ。
+- 実体は `src/ui/CropEditor.tsx` に切り出す(PresetPanel から使う)。ドラッグは pointer events、
+  切り抜き枠は画像に対する % で置く(表示倍率が変わっても追従する)。
+  **キーボード操作の経路は数値入力**が担う(ドラッグは上乗せの手段)。
+- 画像が読めないとき(外部URL のまま参照 等)は**ボタンを無効にして理由を出す**。
+  「読み込み中」と「読めなかった」を別状態で持つ — 一緒にすると失敗が永久に「取得中…」に見える。
 
 ## 主要コンポーネント / 変更点
 | 層 | 変更 |
@@ -71,7 +130,7 @@ test: npm run typecheck && npm run lint && npx vitest run
 | `src/lib/generateCss.ts` | 位置宣言の生成を関数に切り出し(`positionDecls`)。`KEYFRAMES_JUMP_TRANSFORM` を「中央寄せ translate を前置する」形に変更。**`nameBlock` の `left`/`bottom` 直書きを `positionDecls` 経由に置換し、帯の `transform` と中央寄せ分を合成**。`generateCombinedCss` は型の整合のみ(挙動は据え置き) |
 | `src/lib/state.ts` | 保存済み `Preset` 読み込み時に `anchorX`/`anchorY` 欠損を既定値で補完(マイグレーション) |
 | `src/ui/PresetPanel.tsx` | 「位置とサイズ」に 3×3 のアンカー選択を追加。オフセットのラベルをアンカーに追従(「左端からの距離」⇄「右端からの距離」)。画像ブロックにクロップUI(余白を詰める / 範囲指定)とクロップ後寸法の表示 |
-| `src/ui/TachiePreview.tsx` | プレビューの配置をアンカーに追従。クロップは `imageUrl` が差し替わるだけなので**追加対応なし** |
+| `src/ui/TachiePreview.tsx` | プレビューの配置をアンカーに追従(**出力と同じ `placeTachie` / `placeNameLabel` を通し、単位を px → % に付け替えるだけ**)。跳ねの keyframe も `--tp-center` で中央寄せを織り込む。クロップは `imageUrl` が差し替わるだけなので**追加対応なし** |
 | `src/lib/crop.ts`(新規) | `normalizeCropRect` / `computeTrimBounds`(純粋)+ `cropDataUri` / `detectTrimRect`(canvas) |
 | `src/lib/crop.test.ts`(新規) | 矩形の正規化と余白検出の境界ケース(はみ出し・負値・幅0・小数・全面不透明・全面透明・片側のみ余白) |
 | `src/lib/generateCss.test.ts` | 9通り × 発話演出のスナップショット的アサーション。既存(左下)の出力が**変わらない**ことを固定 |
