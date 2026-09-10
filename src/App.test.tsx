@@ -188,6 +188,11 @@ describe('App', () => {
     expect(screen.getByLabelText(/上端からの距離/)).toBeInTheDocument()
     expect(screen.queryByLabelText(/左端からの距離/)).not.toBeInTheDocument()
 
+    // 距離は明示的に入れる。ここで見たいのは「right/top で出るか」であって既定値ではないので、
+    // 既定が変わってもこのテストの意味が変わらないようにする。
+    fireEvent.change(screen.getByLabelText(/右端からの距離/), { target: { value: '16' } })
+    fireEvent.change(screen.getByLabelText(/上端からの距離/), { target: { value: '16' } })
+
     // 出力CSSが right/top で出る（left/bottom は出ない）
     fireEvent.click(screen.getByRole('button', { name: /次へ/ })) // ② → ③
     const out = screen.getByRole('heading', { name: /出力 CSS/ }).closest('.panel')!
