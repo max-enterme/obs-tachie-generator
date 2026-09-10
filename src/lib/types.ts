@@ -343,11 +343,19 @@ export const DEFAULT_SPEAK: SpeakEffect = {
   durationMs: 750,
 }
 
-/** 既定の生成オプション。 */
+/**
+ * 既定の生成オプション。
+ *
+ * **アンカーからの距離は 0**（＝アンカーにぴったり付ける）。位置合わせは OBS 側で
+ * ソースを動かして行うのが実運用なので、ツール側で余白を持たない。
+ *
+ * ※ 発話演出はこの距離を食う（枠・後光は幅のおよそ 6 倍まで外へ広がる）。
+ *   距離 0 のままだと演出が端で切れるが、**必要な余白を UI で知らせる**のは別対応。
+ */
 export const DEFAULT_OPTIONS: GenerateOptions = {
   alwaysShow: true,
-  left: 16,
-  bottom: 16,
+  left: 0,
+  bottom: 0,
   anchorX: DEFAULT_ANCHOR_X,
   anchorY: DEFAULT_ANCHOR_Y,
   width: undefined,

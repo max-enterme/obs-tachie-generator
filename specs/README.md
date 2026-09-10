@@ -1,6 +1,6 @@
 # specs/ — spec / タスク運用
 
-> **規約の正本は `F:\home\SPEC-OPS.md`。** ディレクトリ構成・frontmatter・GitHub 規約・
+> **規約の正本はワークスペース直下の `SPEC-OPS.md`。** ディレクトリ構成・frontmatter・GitHub 規約・
 > テスト宣言(`test`)・降りる箇所・自動実装の前提は、すべてそちらが定義する。
 > ここには再掲しない(二重正本を作らないため)。規約を変えるときは SPEC-OPS だけを編集する。
 
@@ -24,7 +24,9 @@ specs/
 
 | 用途 | スキル |
 |---|---|
-| 新規プロジェクト立ち上げ / feature 雛形追加 | `/dashboard-scaffold` |
-| タスク 1 個を実装 → テスト → レビュー → PR | `/spec-implement` |
+| 新規プロジェクト立ち上げ / feature 雛形追加 | `/spec-plan` |
+| feature を動作確認できる状態まで実装 → テスト → レビュー → PR | `/spec-implement` |
 
-`/spec-implement` は plan.md の `test` が埋まっていることが前提。詳細は SPEC-OPS §05〜§08。
+`/spec-implement` は **feature 単位**(タスク 1 個ずつではない)。自動化できるタスクを塊に束ねて走り、
+人手・実機が要るタスクは飛ばして着地時にまとめて返す。plan.md の `test` が埋まっていることが前提。
+詳細は SPEC-OPS §05〜§08、§11。
