@@ -269,7 +269,7 @@ export default function PresetPanel({
                 <div className="field">
                   <label htmlFor="pr-maxw">
                     埋め込み最大幅(px)・0 で原寸
-                    <small>埋め込み(dataURI)時に縮小／「URLのまま」は対象外</small>
+                    <small>アップロード / URL を埋め込むときに縮小／data URI の直貼りと「URLのまま」は対象外</small>
                   </label>
                   <input
                     id="pr-maxw"
