@@ -73,6 +73,12 @@ describe('presetToOptions', () => {
     expect(o.anchorY).toBeUndefined()
     expect(resolveAnchors(o)).toEqual({ x: 'left', y: 'bottom' })
   })
+
+  it('実寸の縦も渡す', () => {
+    const o = presetToOptions(base, 600, 900)
+    expect(o.imageNaturalWidth).toBe(600)
+    expect(o.imageNaturalHeight).toBe(900)
+  })
 })
 
 describe('既定プリセット', () => {

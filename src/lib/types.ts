@@ -160,11 +160,11 @@ export interface GenerateOptions {
   /** 名前ラベルの見た目。テキストは {@link TachieUser.displayName} / {@link TachieUser.name} 側。 */
   nameLabel: NameLabel
   /**
-   * 立ち絵画像の実サイズ（幅 px）。`width` が未指定（原寸）のときに、名前ラベルの行揃え用の
-   * 箱幅として使う（CSS からは描画中の画像の実寸を参照できないため、アプリ側で測って焼き込む）。
-   * 立ち絵自体の描画には使わない（原寸のまま）。
+   * 立ち絵画像の実サイズ（幅 px）。名前ラベルの箱幅と、立ち絵の描画サイズ(背景方式)に使う。
    */
   imageNaturalWidth?: number
+  /** 立ち絵画像の実サイズ(高さ px)。imageNaturalWidth と対で、立ち絵の描画サイズ(背景方式)に使う。 */
+  imageNaturalHeight?: number
 }
 
 /** 「静かな人を暗くする」で非発話時に掛ける明るさ(%)。 */
@@ -248,7 +248,11 @@ export interface AppState {
  * プリセットを generateCss の {@link GenerateOptions} に落とす（常に個別＝常時表示）。
  * `imageNaturalWidth` は幅が原寸のときの名前ラベル用（測れていなければ省略可）。
  */
-export function presetToOptions(p: Preset, imageNaturalWidth?: number): GenerateOptions {
+export function presetToOptions(
+  p: Preset,
+  imageNaturalWidth?: number,
+  imageNaturalHeight?: number,
+): GenerateOptions {
   return {
     alwaysShow: true,
     left: p.left,
@@ -261,6 +265,7 @@ export function presetToOptions(p: Preset, imageNaturalWidth?: number): Generate
     speak: p.speak,
     nameLabel: p.nameLabel,
     imageNaturalWidth,
+    imageNaturalHeight,
   }
 }
 
