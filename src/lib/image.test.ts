@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { computeResizeDimensions, isWithinSizeLimit } from './image'
+import { computeResizeDimensions, isWithinSizeLimit, measureNaturalSize } from './image'
 
 describe('computeResizeDimensions', () => {
   it('maxWidth 未指定なら原寸のまま', () => {
@@ -51,5 +51,11 @@ describe('isWithinSizeLimit', () => {
   })
   it('上限超過は false', () => {
     expect(isWithinSizeLimit({ size: 3000 } as File, 2000)).toBe(false)
+  })
+})
+
+describe('measureNaturalSize', () => {
+  it('空 URL は null', async () => {
+    expect(await measureNaturalSize('')).toBe(null)
   })
 })
