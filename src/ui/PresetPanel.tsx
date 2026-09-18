@@ -2,6 +2,7 @@ import { useState } from 'react'
 import CropEditor from './CropEditor'
 import { fileToDataUri, isWithinSizeLimit } from '../lib/image'
 import { resolveImageSource, type ImageSourceMode } from '../lib/imageSource'
+import { requiredSpeakMargin, speakMarginNote } from '../lib/speakMargin'
 import {
   resetPresetOptions,
   resolveAnchors,
@@ -106,6 +107,9 @@ export default function PresetPanel({
 
   // アンカー（未指定は左下）。オフセットのラベルも名前の基準辺もここに追従する。
   const anchors = resolveAnchors(editing ?? {})
+  const margin = editing ? requiredSpeakMargin(editing.speak, anchors.x, anchors.y) : null
+  const noteX = editing ? speakMarginNote(margin?.x ?? null, editing.left) : null
+  const noteY = editing ? speakMarginNote(margin?.y ?? null, editing.bottom) : null
 
   async function onFile(file: File | undefined) {
     if (!file || !editing) return
@@ -340,6 +344,7 @@ export default function PresetPanel({
                 <label htmlFor="pr-left">
                   {OFFSET_X_LABEL[anchors.x]}
                   {OFFSET_X_HINT[anchors.x] && <small>{OFFSET_X_HINT[anchors.x]}</small>}
+                  {noteX && <small className={noteX.warn ? 'why' : undefined}>{noteX.text}</small>}
                 </label>
                 <input
                   id="pr-left"
@@ -352,6 +357,7 @@ export default function PresetPanel({
                 <label htmlFor="pr-bottom">
                   {OFFSET_Y_LABEL[anchors.y]}
                   {OFFSET_Y_HINT[anchors.y] && <small>{OFFSET_Y_HINT[anchors.y]}</small>}
+                  {noteY && <small className={noteY.warn ? 'why' : undefined}>{noteY.text}</small>}
                 </label>
                 <input
                   id="pr-bottom"

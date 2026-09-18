@@ -256,4 +256,82 @@ describe('App', () => {
     // 中央寄せ + ぴょこぴょこ（既定ON）で keyframe に中央寄せ分が織り込まれる
     expect(textarea.value).toContain('50% { transform: translateX(-50%) translateY(-10px); }')
   })
+
+  it('A1 既定のプリセットでは距離の欄に余白の警告が出て、足りると補足になる', async () => {
+    render(<App />)
+
+    fireEvent.change(screen.getByLabelText('Discord ユーザーID'), {
+      target: { value: '123456789012345678' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '追加' }))
+    await addPresetWithImage('data:image/png;base64,AAAA')
+
+    expect(document.querySelector('label[for="pr-left"]')?.textContent).toContain(
+      '14px 以上にしてください',
+    )
+    expect(document.querySelector('label[for="pr-bottom"]')?.textContent).toContain(
+      '14px 以上にしてください',
+    )
+
+    fireEvent.change(screen.getByLabelText(/左端からの距離/), { target: { value: '16' } })
+    const left = document.querySelector('label[for="pr-left"]')?.textContent ?? ''
+    expect(left).toContain('発話演出に必要な余白: 14px')
+    expect(left).not.toContain('切れます')
+  })
+
+  it('A2 枠・後光の幅を変えると必要値が追従する', async () => {
+    render(<App />)
+
+    fireEvent.change(screen.getByLabelText('Discord ユーザーID'), {
+      target: { value: '123456789012345678' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '追加' }))
+    await addPresetWithImage('data:image/png;base64,AAAA')
+
+    fireEvent.change(screen.getByLabelText(/枠・後光の幅/), { target: { value: '4' } })
+    expect(document.querySelector('label[for="pr-bottom"]')?.textContent).toContain(
+      '28px 以上にしてください',
+    )
+  })
+
+  it('A3 上アンカーは縦に跳ね量を足し、中央アンカーの欄には出さない', async () => {
+    render(<App />)
+
+    fireEvent.change(screen.getByLabelText('Discord ユーザーID'), {
+      target: { value: '123456789012345678' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '追加' }))
+    await addPresetWithImage('data:image/png;base64,AAAA')
+
+    const group = screen.getByRole('radiogroup', { name: /基準の位置/ })
+    fireEvent.click(within(group).getByRole('radio', { name: '左上' }))
+    expect(document.querySelector('label[for="pr-bottom"]')?.textContent).toContain(
+      '24px 以上にしてください',
+    )
+
+    fireEvent.click(within(group).getByRole('radio', { name: '下中央' }))
+    const left = document.querySelector('label[for="pr-left"]')?.textContent ?? ''
+    expect(left).not.toContain('余白')
+    expect(left).not.toContain('切れます')
+  })
+
+  it('A4 演出を全部 OFF にすると余白の表示が消える', async () => {
+    render(<App />)
+
+    fireEvent.change(screen.getByLabelText('Discord ユーザーID'), {
+      target: { value: '123456789012345678' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '追加' }))
+    await addPresetWithImage('data:image/png;base64,AAAA')
+
+    fireEvent.click(screen.getByRole('button', { name: /枠・後光/ }))
+    fireEvent.click(screen.getByRole('button', { name: /ぴょこぴょこ/ }))
+
+    const left = document.querySelector('label[for="pr-left"]')?.textContent ?? ''
+    const bottom = document.querySelector('label[for="pr-bottom"]')?.textContent ?? ''
+    expect(left).not.toContain('余白')
+    expect(left).not.toContain('切れます')
+    expect(bottom).not.toContain('余白')
+    expect(bottom).not.toContain('切れます')
+  })
 })

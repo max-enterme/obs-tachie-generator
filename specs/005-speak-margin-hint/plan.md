@@ -38,12 +38,12 @@ export interface SpeakMargin {
   y: number | null
 }
 
-/** 枠・後光が立ち絵の外へ広がる量 = 幅 × この倍率(実測 5.7×、理論 6×)。 */
-export const GLOW_EXTENT_PER_WIDTH = 6
+/** 枠・後光が立ち絵の外へ広がる量 = 幅 × この倍率(2026-09-18 の OBS 実測で最大約 6.7×〔幅 2/4/6/12 → 13/26〜27/34〜40/79〜80px〕。安全側に 7×)。 */
+export const GLOW_EXTENT_PER_WIDTH = 7
 
 /**
  * 発話演出が端で切れないための、アンカーからの距離の必要値(px)。
- * - 枠・後光(outline)が ON: 上下左右に 6 × 幅。幅 0 以下は 1 として数える(KEYFRAMES_LIGHT と同じ)
+ * - 枠・後光(outline)が ON: 上下左右に 7 × 幅。幅 0 以下は 1 として数える(KEYFRAMES_LIGHT と同じ)
  * - ぴょこぴょこ(bounce && jumpPx > 0): 上方向にだけ動くので、anchorY === 'top' のときだけ縦に jumpPx を足す
  * - 各軸の合計を最後に Math.ceil で整数へ切り上げる(幅・跳ね高さが小数でも表示は整数 px)
  * - anchorX === 'center' なら x は null、anchorY === 'middle' なら y は null
@@ -63,7 +63,7 @@ export function speakMarginNote(
 - **常に警告を出す** — OBS 側でソースを動かして位置合わせする運用(距離 0 のまま)の人にも鳴り続ける。MAX が「足りないときだけ警告」を選んだ(2026-09-16)。
 - **既定の距離を必要値に合わせて増やす** — 既存プリセットと出力CSSの見た目が変わる。rail #795 で「既定値は変えない」と決まっている。
 - **`generateCss.ts` の中に計算を置く** — 出力CSSの差分ゼロを受け入れ条件にしているので、計算だけを別ファイルに分けて差分を 0 に保つ。
-- **実測値(5.7×)をそのまま使う** — 端で 1px 切れうる。安全側の 6× を切り上げで使う(rail #795)。
+- **実測値(5.7×)をそのまま使う** — 端で 1px 切れうる。安全側の 6× を切り上げで使う(rail #795)。6× も 2026-09-18 の実測で 1〜8px 足りなかったため 7× に上げた。
 - **中央アンカーにも必要値を出す** — 中央は「中央からのズレ」で端に寄せる設定ではなく、距離と比べる意味が無い。
 - **Playwright で画面テストを書く** — spec 004(PR #42)が未マージで repo にまだ無い。表示は文字 1 行なので jsdom の画面テスト(`src/App.test.tsx`)で判定する。
 
@@ -79,33 +79,33 @@ export function speakMarginNote(
 モック: ダッシュボード Pages の `obs-tachie-generator/005-speak-margin-mock.html`(A 警告 / B 補足 / C 上アンカー / D 中央・演出なし)。
 
 ## テスト
-- 枠・後光 ON・ぴょこぴょこ OFF・右下: 幅 2/4/6/12 → x・y とも 12/24/36/72。
-- 幅 0 → 6(1 として数える)。幅 2.5 → 15、幅 2.3 → 14(切り上げ)。
-- 枠・後光 ON 幅 2 + ぴょこぴょこ 10: 左上 → y 22 / 左下 → y 12。
+- 枠・後光 ON・ぴょこぴょこ OFF・右下: 幅 2/4/6/12 → x・y とも 14/28/42/84。
+- 幅 0 → 7(1 として数える)。幅 2.5 → 18、幅 2.3 → 17(切り上げ)。
+- 枠・後光 ON 幅 2 + ぴょこぴょこ 10: 左上 → y 24 / 左下 → y 14。
 - 枠・後光 OFF + ぴょこぴょこ 10: 左上 → x 0・y 10 / 左下 → x 0・y 0。ぴょこぴょこ ON でも jumpPx 0 → 足さない。
 - 中央アンカー(下中央 / 左中央 / 中央): 該当軸が null。
 - `speakMarginNote`: (12, 0) → 警告 / (12, 12) → 補足 / (12, 16) → 補足 / (0, 0) → null / (null, 0) → null。
 - 画面(App)は 4 本に分け、**どれも既定のプリセット(左下・距離 0・枠 幅2・ぴょこぴょこ 10)から始める**(前のテストの操作を引き継がない):
-  - A1: 左端・下端の欄に「12px 以上」の警告 → 左端を 16 にすると左端は「必要な余白: 12px」。
-  - A2: 枠・後光の幅を 4 にすると下端に「24px 以上」。
-  - A3: 左上を選ぶと上端に「22px 以上」(幅 2 のまま)→ 続けて下中央を選ぶと横の欄に余白の文言が無い。
+  - A1: 左端・下端の欄に「14px 以上」の警告 → 左端を 16 にすると左端は「必要な余白: 14px」。
+  - A2: 枠・後光の幅を 4 にすると下端に「28px 以上」。
+  - A3: 左上を選ぶと上端に「24px 以上」(幅 2 のまま)→ 続けて下中央を選ぶと横の欄に余白の文言が無い。
   - A4: 枠・後光とぴょこぴょこを OFF にするとどの欄にも無い。
 - `src/lib/generateCss.ts` / `src/lib/generateCss.test.ts` は変更しない(既存テストがそのまま緑)。
 
 ## テストケース
 | テスト名 | 置き場(ファイル) | 入力・前提 | 期待値 |
 |---|---|---|---|
-| `describe('requiredSpeakMargin')` › `S1 枠・後光は幅×6を上下左右に` | `src/lib/speakMargin.test.ts` | `{ ...DEFAULT_SPEAK, bounce: false, outline: true, outlineWidth: w }`、`('right', 'bottom')`、w = 2/4/6/12 | `{ x: 6w, y: 6w }` = 12/24/36/72 |
-| `describe('requiredSpeakMargin')` › `S2 幅0以下は1として数え、端数は切り上げ` | `src/lib/speakMargin.test.ts` | outlineWidth 0 / 2.5 / 2.3、`('left', 'bottom')` | x = 6 / 15 / 14 |
-| `describe('requiredSpeakMargin')` › `S3 上アンカーだけ縦に跳ね量を足す` | `src/lib/speakMargin.test.ts` | `{ ...DEFAULT_SPEAK, outline: true, outlineWidth: 2, bounce: true, jumpPx: 10 }`、`('left', 'top')` と `('left', 'bottom')`。加えて `jumpPx: 10.5` の `('left', 'top')` | `{ x: 12, y: 22 }` と `{ x: 12, y: 12 }`。`jumpPx: 10.5` は `{ x: 12, y: 23 }`(22.5 を切り上げ) |
+| `describe('requiredSpeakMargin')` › `S1 枠・後光は幅×7を上下左右に` | `src/lib/speakMargin.test.ts` | `{ ...DEFAULT_SPEAK, bounce: false, outline: true, outlineWidth: w }`、`('right', 'bottom')`、w = 2/4/6/12 | `{ x: 7w, y: 7w }` = 14/28/42/84 |
+| `describe('requiredSpeakMargin')` › `S2 幅0以下は1として数え、端数は切り上げ` | `src/lib/speakMargin.test.ts` | outlineWidth 0 / 2.5 / 2.3、`('left', 'bottom')` | x = 7 / 18 / 17 |
+| `describe('requiredSpeakMargin')` › `S3 上アンカーだけ縦に跳ね量を足す` | `src/lib/speakMargin.test.ts` | `{ ...DEFAULT_SPEAK, outline: true, outlineWidth: 2, bounce: true, jumpPx: 10 }`、`('left', 'top')` と `('left', 'bottom')`。加えて `jumpPx: 10.5` の `('left', 'top')` | `{ x: 14, y: 24 }` と `{ x: 14, y: 14 }`。`jumpPx: 10.5` は `{ x: 14, y: 25 }`(24.5 を切り上げ) |
 | `describe('requiredSpeakMargin')` › `S4 枠なし・ぴょこぴょこだけ` | `src/lib/speakMargin.test.ts` | `{ ...DEFAULT_SPEAK, outline: false, bounce: true, jumpPx: 10 }`、`('left', 'top')` と `('left', 'bottom')` | `{ x: 0, y: 10 }` と `{ x: 0, y: 0 }` |
 | `describe('requiredSpeakMargin')` › `S5 jumpPx 0 は足さない` | `src/lib/speakMargin.test.ts` | `{ ...DEFAULT_SPEAK, outline: false, bounce: true, jumpPx: 0 }`、`('left', 'top')` | `{ x: 0, y: 0 }` |
-| `describe('requiredSpeakMargin')` › `S6 中央アンカーの軸は null` | `src/lib/speakMargin.test.ts` | `DEFAULT_SPEAK`、`('center', 'bottom')` / `('left', 'middle')` / `('center', 'middle')` | `{ x: null, y: 12 }` / `{ x: 12, y: null }` / `{ x: null, y: null }` |
+| `describe('requiredSpeakMargin')` › `S6 中央アンカーの軸は null` | `src/lib/speakMargin.test.ts` | `DEFAULT_SPEAK`、`('center', 'bottom')` / `('left', 'middle')` / `('center', 'middle')` | `{ x: null, y: 14 }` / `{ x: 14, y: null }` / `{ x: null, y: null }` |
 | `describe('speakMarginNote')` › `S7 足りないときだけ警告` | `src/lib/speakMargin.test.ts` | `(12, 0)` / `(12, 12)` / `(12, 16)` / `(24, 23)` / `(24, 24)` | `{ warn: true, text: '発話演出が端で切れます。12px 以上にしてください' }` / `{ warn: false, text: '発話演出に必要な余白: 12px' }` / 同じく補足 / `{ warn: true, text: '発話演出が端で切れます。24px 以上にしてください' }` / `{ warn: false, text: '発話演出に必要な余白: 24px' }` |
 | `describe('speakMarginNote')` › `S8 必要値0・nullは出さない` | `src/lib/speakMargin.test.ts` | `(0, 0)` / `(null, 0)` | どちらも `null` |
-| `A1 既定のプリセットでは距離の欄に余白の警告が出て、足りると補足になる` | `src/App.test.tsx` | 既存テスト `3×3 のアンカー選択…` と同じ手順(ユーザーID 入力 → 追加 → `addPresetWithImage`)。既定 = 左下・距離 0・枠 幅2・ぴょこぴょこ 10 | `document.querySelector('label[for="pr-left"]')` と `[for="pr-bottom"]` の textContent に `12px 以上にしてください`。`fireEvent.change(getByLabelText(/左端からの距離/), { target: { value: '16' } })` 後、`pr-left` は `発話演出に必要な余白: 12px` を含み `切れます` を含まない |
-| `A2 枠・後光の幅を変えると必要値が追従する` | `src/App.test.tsx` | A1 と同じ前提から `fireEvent.change(getByLabelText(/枠・後光の幅/), { target: { value: '4' } })` | `pr-bottom` の label が `24px 以上にしてください` を含む |
-| `A3 上アンカーは縦に跳ね量を足し、中央アンカーの欄には出さない` | `src/App.test.tsx` | A1 と同じ前提から、`radiogroup /基準の位置/` の `左上` をクリック → 次に `下中央` をクリック | 左上: `pr-bottom`(上端からの距離)の label が `22px 以上にしてください` を含む。下中央: `pr-left`(横中央からのズレ)の label が `余白` も `切れます` も含まない |
+| `A1 既定のプリセットでは距離の欄に余白の警告が出て、足りると補足になる` | `src/App.test.tsx` | 既存テスト `3×3 のアンカー選択…` と同じ手順(ユーザーID 入力 → 追加 → `addPresetWithImage`)。既定 = 左下・距離 0・枠 幅2・ぴょこぴょこ 10 | `document.querySelector('label[for="pr-left"]')` と `[for="pr-bottom"]` の textContent に `14px 以上にしてください`。`fireEvent.change(getByLabelText(/左端からの距離/), { target: { value: '16' } })` 後、`pr-left` は `発話演出に必要な余白: 14px` を含み `切れます` を含まない |
+| `A2 枠・後光の幅を変えると必要値が追従する` | `src/App.test.tsx` | A1 と同じ前提から `fireEvent.change(getByLabelText(/枠・後光の幅/), { target: { value: '4' } })` | `pr-bottom` の label が `28px 以上にしてください` を含む |
+| `A3 上アンカーは縦に跳ね量を足し、中央アンカーの欄には出さない` | `src/App.test.tsx` | A1 と同じ前提から、`radiogroup /基準の位置/` の `左上` をクリック → 次に `下中央` をクリック | 左上: `pr-bottom`(上端からの距離)の label が `24px 以上にしてください` を含む。下中央: `pr-left`(横中央からのズレ)の label が `余白` も `切れます` も含まない |
 | `A4 演出を全部 OFF にすると余白の表示が消える` | `src/App.test.tsx` | A1 と同じ前提から、`getByRole('button', { name: /枠・後光/ })` と `getByRole('button', { name: /ぴょこぴょこ/ })` をクリックして OFF | `pr-left` と `pr-bottom` の label が `余白` も `切れます` も含まない |
 
 ## 実装ブロック
@@ -120,9 +120,9 @@ export function speakMarginNote(
   004 が先にマージされて行番号がずれていたら、`DEFAULT_OPTIONS` の直前の doc コメント内「必要な余白を UI で知らせる」の文を探して直す。
 
 ## リスク / 降りる箇所
-- **OBS 実機の確認(T3)は人が行う**: OBS で立ち絵のブラウザソースを右下アンカー・枠・後光 幅 4・距離 24 にした CSS で表示し、
+- **OBS 実機の確認(T3)は人が行う**: OBS で立ち絵のブラウザソースを右下アンカー・枠・後光 幅 4・距離 28 にした CSS で表示し、
   Discord で話して枠・後光が右端・下端で切れていないかを見る。数値で見るなら OBS 確認キットで
-  `node --experimental-strip-types glow-extent.mjs 4` を回し、はみ出し量が 24px 以下かを出力で見る。
+  `node --experimental-strip-types glow-extent.mjs 4` を回し、はみ出し量が 28px 以下かを出力で見る。
 - `getByRole('button', { name: /枠・後光/ })` が名前ラベル側のボタンにも当たって複数一致したら、`src/App.test.tsx` の該当テストで
   `data-on` を持つ発話演出の `.chips` の中に `within` で絞る。それでも決まらなければ止めて報告する(PresetPanel.tsx にテスト用の属性を足さない)。
 - 既存の `src/App.test.tsx` のテストが、距離の欄の label に文言が増えたことで落ちたら、実装を止めて報告する(既存テストを書き換えない)。

@@ -355,7 +355,7 @@ export const DEFAULT_SPEAK: SpeakEffect = {
  * ソースを動かして行うのが実運用なので、ツール側で余白を持たない。
  *
  * ※ 発話演出はこの距離を食う（枠・後光は幅のおよそ 6 倍まで外へ広がる）。
- *   距離 0 のままだと演出が端で切れるが、**必要な余白を UI で知らせる**のは別対応。
+ *   必要な余白はプリセット編集の距離欄に出す（`requiredSpeakMargin`）。
  */
 export const DEFAULT_OPTIONS: GenerateOptions = {
   alwaysShow: true,
