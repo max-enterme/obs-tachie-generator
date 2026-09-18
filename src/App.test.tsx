@@ -267,15 +267,15 @@ describe('App', () => {
     await addPresetWithImage('data:image/png;base64,AAAA')
 
     expect(document.querySelector('label[for="pr-left"]')?.textContent).toContain(
-      '12px 以上にしてください',
+      '14px 以上にしてください',
     )
     expect(document.querySelector('label[for="pr-bottom"]')?.textContent).toContain(
-      '12px 以上にしてください',
+      '14px 以上にしてください',
     )
 
     fireEvent.change(screen.getByLabelText(/左端からの距離/), { target: { value: '16' } })
     const left = document.querySelector('label[for="pr-left"]')?.textContent ?? ''
-    expect(left).toContain('発話演出に必要な余白: 12px')
+    expect(left).toContain('発話演出に必要な余白: 14px')
     expect(left).not.toContain('切れます')
   })
 
@@ -290,7 +290,7 @@ describe('App', () => {
 
     fireEvent.change(screen.getByLabelText(/枠・後光の幅/), { target: { value: '4' } })
     expect(document.querySelector('label[for="pr-bottom"]')?.textContent).toContain(
-      '24px 以上にしてください',
+      '28px 以上にしてください',
     )
   })
 
@@ -306,7 +306,7 @@ describe('App', () => {
     const group = screen.getByRole('radiogroup', { name: /基準の位置/ })
     fireEvent.click(within(group).getByRole('radio', { name: '左上' }))
     expect(document.querySelector('label[for="pr-bottom"]')?.textContent).toContain(
-      '22px 以上にしてください',
+      '24px 以上にしてください',
     )
 
     fireEvent.click(within(group).getByRole('radio', { name: '下中央' }))

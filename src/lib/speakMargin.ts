@@ -6,12 +6,12 @@ export interface SpeakMargin {
   y: number | null
 }
 
-/** 枠・後光が立ち絵の外へ広がる量 = 幅 × この倍率(実測 5.7×、理論 6×)。 */
-export const GLOW_EXTENT_PER_WIDTH = 6
+/** 枠・後光が立ち絵の外へ広がる量 = 幅 × この倍率(2026-09-18 の OBS 実測で最大約 6.7×〔幅 2/4/6/12 → 13/26〜27/34〜40/79〜80px〕。安全側に 7×)。 */
+export const GLOW_EXTENT_PER_WIDTH = 7
 
 /**
  * 発話演出が端で切れないための、アンカーからの距離の必要値(px)。
- * - 枠・後光(outline)が ON: 上下左右に 6 × 幅。幅 0 以下は 1 として数える(KEYFRAMES_LIGHT と同じ)
+ * - 枠・後光(outline)が ON: 上下左右に 7 × 幅。幅 0 以下は 1 として数える(KEYFRAMES_LIGHT と同じ)
  * - ぴょこぴょこ(bounce && jumpPx > 0): 上方向にだけ動くので、anchorY === 'top' のときだけ縦に jumpPx を足す
  * - 各軸の合計を最後に Math.ceil で整数へ切り上げる(幅・跳ね高さが小数でも表示は整数 px)
  * - anchorX === 'center' なら x は null、anchorY === 'middle' なら y は null
