@@ -3,7 +3,7 @@ feature: speak-margin-hint
 issue: 43
 release: r3
 priority: should
-status: レビュー
+status: 完了
 ---
 
 # 発話演出に必要な余白を距離の入力欄に出す
