@@ -3,12 +3,12 @@ import { requiredSpeakMargin, speakMarginNote } from './speakMargin'
 import { DEFAULT_SPEAK } from './types'
 
 describe('requiredSpeakMargin', () => {
-  it('S1 枠・後光は幅×6を上下左右に', () => {
+  it('S1 枠・後光は幅×7を上下左右に', () => {
     for (const [w, expected] of [
-      [2, 12],
-      [4, 24],
-      [6, 36],
-      [12, 72],
+      [2, 14],
+      [4, 28],
+      [6, 42],
+      [12, 84],
     ] as const) {
       const speak = { ...DEFAULT_SPEAK, bounce: false, outline: true, outlineWidth: w }
       expect(requiredSpeakMargin(speak, 'right', 'bottom')).toEqual({ x: expected, y: expected })
@@ -17,9 +17,9 @@ describe('requiredSpeakMargin', () => {
 
   it('S2 幅0以下は1として数え、端数は切り上げ', () => {
     for (const [w, expected] of [
-      [0, 6],
-      [2.5, 15],
-      [2.3, 14],
+      [0, 7],
+      [2.5, 18],
+      [2.3, 17],
     ] as const) {
       const speak = { ...DEFAULT_SPEAK, bounce: false, outline: true, outlineWidth: w }
       expect(requiredSpeakMargin(speak, 'left', 'bottom').x).toBe(expected)
@@ -28,11 +28,11 @@ describe('requiredSpeakMargin', () => {
 
   it('S3 上アンカーだけ縦に跳ね量を足す', () => {
     const speak = { ...DEFAULT_SPEAK, outline: true, outlineWidth: 2, bounce: true, jumpPx: 10 }
-    expect(requiredSpeakMargin(speak, 'left', 'top')).toEqual({ x: 12, y: 22 })
-    expect(requiredSpeakMargin(speak, 'left', 'bottom')).toEqual({ x: 12, y: 12 })
+    expect(requiredSpeakMargin(speak, 'left', 'top')).toEqual({ x: 14, y: 24 })
+    expect(requiredSpeakMargin(speak, 'left', 'bottom')).toEqual({ x: 14, y: 14 })
 
     const speakHalf = { ...speak, jumpPx: 10.5 }
-    expect(requiredSpeakMargin(speakHalf, 'left', 'top')).toEqual({ x: 12, y: 23 })
+    expect(requiredSpeakMargin(speakHalf, 'left', 'top')).toEqual({ x: 14, y: 25 })
   })
 
   it('S4 枠なし・ぴょこぴょこだけ', () => {
@@ -47,8 +47,8 @@ describe('requiredSpeakMargin', () => {
   })
 
   it('S6 中央アンカーの軸は null', () => {
-    expect(requiredSpeakMargin(DEFAULT_SPEAK, 'center', 'bottom')).toEqual({ x: null, y: 12 })
-    expect(requiredSpeakMargin(DEFAULT_SPEAK, 'left', 'middle')).toEqual({ x: 12, y: null })
+    expect(requiredSpeakMargin(DEFAULT_SPEAK, 'center', 'bottom')).toEqual({ x: null, y: 14 })
+    expect(requiredSpeakMargin(DEFAULT_SPEAK, 'left', 'middle')).toEqual({ x: 14, y: null })
     expect(requiredSpeakMargin(DEFAULT_SPEAK, 'center', 'middle')).toEqual({ x: null, y: null })
   })
 })
