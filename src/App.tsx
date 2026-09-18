@@ -6,7 +6,7 @@ import CombinePanel from './ui/CombinePanel'
 import OutputPanel from './ui/OutputPanel'
 import TachiePreview from './ui/TachiePreview'
 import Stepper, { type StepDef } from './ui/Stepper'
-import { useImageNaturalWidth } from './ui/useImageNaturalWidth'
+import { useImageNaturalSize } from './ui/useImageNaturalSize'
 import { loadState, saveState } from './lib/state'
 import {
   makeDefaultPreset,
@@ -54,9 +54,9 @@ export default function App() {
   // ②のプレビュー用の名前。プリセット単体は「誰」を持たないので、選択中（無ければ先頭）の
   // ユーザーの名前を仮に当てる（誰も居なければ TachiePreview 側の仮名にフォールバック）。
   const sampleNameText = selectedUser ? resolveDisplayName(selectedUser) : ''
-  // 幅が原寸のプリセットでも名前の行揃えを使えるよう、画像の実サイズを測っておく。
-  const focusedNaturalW = useImageNaturalWidth(focusedPreset?.imageUrl)
-  const selectedNaturalW = useImageNaturalWidth(selectedPreset?.imageUrl)
+  // 幅が原寸のプリセットでも名前の行揃えや立ち絵の描画サイズを使えるよう、画像の実サイズを測っておく。
+  const focusedNatural = useImageNaturalSize(focusedPreset?.imageUrl)
+  const selectedNatural = useImageNaturalSize(selectedPreset?.imageUrl)
 
   // --- users ---
   function addUser(user: AppUser) {
@@ -161,7 +161,7 @@ export default function App() {
               onAdd={addPreset}
               onRemove={removePreset}
               onChange={changePreset}
-              imageNaturalWidth={focusedNaturalW}
+              imageNaturalWidth={focusedNatural?.width ?? null}
             />
             <TachiePreview
               preset={focusedPreset}
@@ -206,7 +206,8 @@ export default function App() {
             <OutputPanel
               user={selectedUser}
               preset={selectedPreset}
-              imageNaturalWidth={selectedNaturalW}
+              imageNaturalWidth={selectedNatural?.width ?? null}
+              imageNaturalHeight={selectedNatural?.height ?? null}
             />
           </section>
         )}

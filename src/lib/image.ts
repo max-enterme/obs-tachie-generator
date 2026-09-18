@@ -62,22 +62,23 @@ function loadImage(dataUrl: string): Promise<HTMLImageElement> {
 }
 
 /**
- * 画像の実サイズ（幅 px）を測る。読めない・空 URL なら null。
+ * 画像の実サイズ（横・縦 px）を測る。読めない・空 URL なら null。
  *
- * 幅を「原寸」にしているプリセットでも、名前ラベルの行揃えには**数値の幅**が要る
- * （CSS からは `content: url(...)` で描いた画像の実寸を参照できない）。そこでアプリ側で測り、
- * 出力CSSに焼き込むために使う。
+ * 幅を「原寸」にしているプリセットでも、名前ラベルの行揃えや立ち絵の描画サイズ（背景方式）には
+ * **数値の実寸**が要る（CSS からは `content: url(...)` で描いた画像の実寸を参照できない）。
+ * そこでアプリ側で測り、出力CSSに焼き込むために使う。
  */
-export async function measureNaturalWidth(
+export async function measureNaturalSize(
   url: string,
   timeoutMs = 8000,
-): Promise<number | null> {
+): Promise<Dimensions | null> {
   if (!url) return null
   try {
     // 応答しないホストだと onload / onerror のどちらも来ないので、待ち続けない。
     const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs))
     const img = await Promise.race([loadImage(url), timeout])
-    return img ? img.naturalWidth || null : null
+    if (!img || !img.naturalWidth || !img.naturalHeight) return null
+    return { width: img.naturalWidth, height: img.naturalHeight }
   } catch {
     return null
   }

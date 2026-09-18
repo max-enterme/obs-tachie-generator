@@ -527,35 +527,78 @@ function keyframeBlocks(
 }
 
 /**
+ * 立ち絵 body::after の描画サイズ(px)。背景画像方式は箱の高さが自動で決まらないため、ここで焼き込む。
+ * 実寸(横・縦)のどちらかが無い / 0 以下なら null(= 呼び出し側は従来の content 方式に戻す)。
+ * 幅指定(> 0)があればその幅に縦横比を保って合わせる。無ければ実寸。
+ */
+export function tachieBoxSize(
+  width: number | undefined,
+  naturalWidth: number | undefined,
+  naturalHeight: number | undefined,
+): { width: number; height: number } | null {
+  if (naturalWidth == null || naturalWidth <= 0 || naturalHeight == null || naturalHeight <= 0) {
+    return null
+  }
+  const w = width != null && width > 0 ? width : naturalWidth
+  const h = Math.max(1, Math.round((w * naturalHeight) / naturalWidth))
+  return { width: w, height: h }
+}
+
+/**
  * 常時表示（standalone）。`body::after` 1要素で1人を描画する。1人=1ブラウザソース。
  */
 export function generateStandaloneCss(user: TachieUser, options: GenerateOptions): string {
   const id = safeId(user.id)
-  const { left, bottom, width, dimWhenQuiet, hideWhenAway, speak } = options
+  const { left, bottom, width, dimWhenQuiet, hideWhenAway, speak, imageNaturalWidth, imageNaturalHeight } =
+    options
   const effects = activeEffects(speak)
   // 位置はアンカー基準（未指定は左下＝従来の出力と一致）。中央寄せ分の translate はここで受け取り、
   // 静止時の transform と speak-jump の両方に**同じものを**渡す（→ composeTransform の不変条件）。
   const pos = placementDecls(placeTachie(resolveAnchors(options), left, bottom))
   const staticTransform = composeTransform(...pos.transforms)
 
-  const afterDecls = [
-    `  content: var(--img-stand-url-${id});`,
-    `  position: fixed;`,
-    ...pos.decls.map((d) => `  ${d}`),
-    // 通話にいないときは隠す設定なら、既定は非表示（在室時だけ下のルールで出す）。
-    `  display: ${hideWhenAway ? 'none' : 'block'};`,
-    ...(staticTransform ? [`  transform: ${staticTransform};`] : []),
-    ...(width != null ? [`  width: ${width}px;`] : []),
-    // 静かな人を暗くする：非発話時の既定を暗く
-    ...(dimWhenQuiet ? [`  filter: brightness(${DIM_BRIGHTNESS_PCT}%);`] : []),
-  ]
+  // 実寸(横・縦)がそろっているときだけ背景画像方式で描く（箱の大きさ = 描かれる絵の大きさ）。
+  // そろわなければ従来の content 方式に戻す（読み込み中・読めない URL でも表示は保つ）。
+  const box = tachieBoxSize(width, imageNaturalWidth, imageNaturalHeight)
+
+  const afterDecls = box
+    ? [
+        `  content: "";`,
+        `  position: fixed;`,
+        ...pos.decls.map((d) => `  ${d}`),
+        `  display: ${hideWhenAway ? 'none' : 'block'};`,
+        ...(staticTransform ? [`  transform: ${staticTransform};`] : []),
+        `  width: ${box.width}px;`,
+        `  height: ${box.height}px;`,
+        `  background-image: var(--img-stand-url-${id});`,
+        `  background-size: contain;`,
+        `  background-repeat: no-repeat;`,
+        `  background-position: center;`,
+        ...(dimWhenQuiet ? [`  filter: brightness(${DIM_BRIGHTNESS_PCT}%);`] : []),
+      ]
+    : [
+        `  content: var(--img-stand-url-${id});`,
+        `  position: fixed;`,
+        ...pos.decls.map((d) => `  ${d}`),
+        // 通話にいないときは隠す設定なら、既定は非表示（在室時だけ下のルールで出す）。
+        `  display: ${hideWhenAway ? 'none' : 'block'};`,
+        ...(staticTransform ? [`  transform: ${staticTransform};`] : []),
+        ...(width != null ? [`  width: ${width}px;`] : []),
+        // 静かな人を暗くする：非発話時の既定を暗く
+        ...(dimWhenQuiet ? [`  filter: brightness(${DIM_BRIGHTNESS_PCT}%);`] : []),
+      ]
+
+  const afterHeader = box
+    ? `/* 立ち絵（常時表示：通話に居ても居なくても同じ位置）
+   描画サイズ ${box.width}x${box.height}px は立ち絵画像の実サイズから算出。**画像を差し替えたらCSSを出し直すこと**。 */`
+    : `/* 立ち絵（常時表示：通話に居ても居なくても同じ位置） */`
 
   const parts: string[] = [
     rootBlock([user]),
     `/* 立ち絵は body::after ただ1つで描画（唯一の描画源＝位置ズレが起きない）。
    Streamkit の実要素は全部隠し、発話だけ検知して body::after を演出する。 */`,
     `body, #root {\n  overflow: hidden !important;\n}`,
-    `/* 立ち絵（常時表示：通話に居ても居なくても同じ位置） */\nbody::after {\n${afterDecls.join('\n')}\n}`,
+    `${afterHeader}\nbody::after {\n${afterDecls.join('\n')}\n}`,
   ]
 
   // 名前（任意テキスト）。表示ON かつ名前が空でないときだけ body::before を足す。

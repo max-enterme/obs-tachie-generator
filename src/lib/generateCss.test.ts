@@ -3,6 +3,7 @@ import {
   generateCombinedCss,
   generateCss,
   generateStandaloneCss,
+  tachieBoxSize,
 } from './generateCss'
 import {
   DEFAULT_OPTIONS,
@@ -862,6 +863,88 @@ img {
   display: none !important;
 }
 `,
+    )
+  })
+})
+
+describe('tachieBoxSize', () => {
+  it('幅指定は縦横比を保って縮める', () => {
+    expect(tachieBoxSize(300, 600, 900)).toEqual({ width: 300, height: 450 })
+    expect(tachieBoxSize(301, 600, 900)).toEqual({ width: 301, height: 452 })
+  })
+
+  it('幅未指定・0 は実寸', () => {
+    expect(tachieBoxSize(undefined, 600, 900)).toEqual({ width: 600, height: 900 })
+    expect(tachieBoxSize(0, 600, 900)).toEqual({ width: 600, height: 900 })
+  })
+
+  it('実寸がそろわなければ null', () => {
+    expect(tachieBoxSize(300, undefined, 900)).toBeNull()
+    expect(tachieBoxSize(300, 600, undefined)).toBeNull()
+    expect(tachieBoxSize(300, 0, 900)).toBeNull()
+    expect(tachieBoxSize(300, 600, 0)).toBeNull()
+  })
+})
+
+describe('背景画像方式', () => {
+  it('実寸があると背景画像方式で出す(幅指定)', () => {
+    const css = generateStandaloneCss(
+      USER_A,
+      opts({ width: 300, imageNaturalWidth: 600, imageNaturalHeight: 900 }),
+    )
+    expect(css).toContain('content: "";')
+    expect(css).toContain('width: 300px;')
+    expect(css).toContain('height: 450px;')
+    expect(css).toContain('background-image: var(--img-stand-url-123456789012345678);')
+    expect(css).toContain('background-size: contain;')
+    expect(css).toContain('background-repeat: no-repeat;')
+    expect(css).toContain('background-position: center;')
+    expect(css).not.toContain('content: var(--img-stand-url-')
+  })
+
+  it('背景方式だけ差し替えの注記を出す', () => {
+    const withNatural = generateStandaloneCss(
+      USER_A,
+      opts({ width: 300, imageNaturalWidth: 600, imageNaturalHeight: 900 }),
+    )
+    expect(withNatural).toContain(
+      '描画サイズ 300x450px は立ち絵画像の実サイズから算出。**画像を差し替えたらCSSを出し直すこと**。',
+    )
+    const withoutNatural = generateStandaloneCss(USER_A, opts({ width: 300 }))
+    expect(withoutNatural).not.toContain('画像を差し替えたらCSSを出し直すこと')
+  })
+
+  it('実寸があると背景画像方式で出す(原寸)', () => {
+    const css = generateStandaloneCss(
+      USER_A,
+      opts({ width: undefined, imageNaturalWidth: 600, imageNaturalHeight: 900 }),
+    )
+    expect(css).toContain('width: 600px;')
+    expect(css).toContain('height: 900px;')
+  })
+
+  it('実寸が無ければ出力は従来のまま', () => {
+    const a = generateStandaloneCss(USER_A, opts({ width: 300 }))
+    const b = generateStandaloneCss(USER_A, opts({ width: 300, imageNaturalWidth: 600 }))
+    expect(a).toBe(b)
+    expect(a).toContain('content: var(--img-stand-url-')
+    expect(a).toContain('width: 300px;')
+    expect(a).not.toContain('background-size')
+  })
+
+  it('中央アンカーの transform は方式で変わらない', () => {
+    const base = opts({ anchorX: 'center', anchorY: 'middle', width: 300 })
+    const withNatural = opts({
+      anchorX: 'center',
+      anchorY: 'middle',
+      width: 300,
+      imageNaturalWidth: 600,
+      imageNaturalHeight: 900,
+    })
+    const transformLines = (css: string) =>
+      css.split('\n').filter((line) => /^\s*transform:/.test(line))
+    expect(transformLines(generateStandaloneCss(USER_A, base))).toEqual(
+      transformLines(generateStandaloneCss(USER_A, withNatural)),
     )
   })
 })

@@ -8,8 +8,10 @@ interface Props {
   user: AppUser | null
   /** 作業中選択のプリセット（未選択なら null）。 */
   preset: Preset | null
-  /** 立ち絵画像の実サイズ（幅 px）。幅が原寸のときの名前ラベルの行揃えに使う。 */
+  /** 立ち絵画像の実サイズ（幅 px）。幅が原寸のときの名前ラベルの行揃えや立ち絵の描画サイズに使う。 */
   imageNaturalWidth?: number | null
+  /** 立ち絵画像の実サイズ（高さ px）。imageNaturalWidth と対で、立ち絵の描画サイズ(背景方式)に使う。 */
+  imageNaturalHeight?: number | null
 }
 
 /**
@@ -17,7 +19,7 @@ interface Props {
  * `generateCss([renderUser(user, preset)], presetToOptions(preset))` で合成。
  * まとめ版は出さない（lib の `generateCombinedCss` は温存しているが UI からは呼ばない）。
  */
-export default function OutputPanel({ user, preset, imageNaturalWidth }: Props) {
+export default function OutputPanel({ user, preset, imageNaturalWidth, imageNaturalHeight }: Props) {
   const [copied, setCopied] = useState(false)
 
   const out = useMemo(() => {
@@ -29,10 +31,10 @@ export default function OutputPanel({ user, preset, imageNaturalWidth }: Props) 
       filename: cssFilename(`${userLabel}-${presetLabel}`),
       css: generateCss(
         [renderUser(user, preset)],
-        presetToOptions(preset, imageNaturalWidth ?? undefined),
+        presetToOptions(preset, imageNaturalWidth ?? undefined, imageNaturalHeight ?? undefined),
       ),
     }
-  }, [user, preset, imageNaturalWidth])
+  }, [user, preset, imageNaturalWidth, imageNaturalHeight])
 
   // 行揃え（左以外）や「立ち絵の幅いっぱい」の帯は箱幅が要る。幅未指定＋実測できずだと
   // 設定だけ残って出力から黙って消えるので、その状態を明示する。

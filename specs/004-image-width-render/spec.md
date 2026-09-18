@@ -3,7 +3,7 @@ feature: image-width-render
 issue: 32
 release: r3
 priority: must
-status: 未着手
+status: レビュー
 ---
 
 # 立ち絵の幅指定を出力CSSでも効かせる
