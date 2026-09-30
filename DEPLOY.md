@@ -1,75 +1,29 @@
-# デプロイ
+# デプロイ（GitHub Pages）
 
-主の公開先は **GitHub Pages**。旧公開先の Cloudflare Workers の手順も後半に残す。
-
-## GitHub Pages（現行）
-
-`main` への push で [`.github/workflows/pages.yml`](.github/workflows/pages.yml) が走り、`dist/` を Pages に公開する。
+`main` への push で [`.github/workflows/pages.yml`](.github/workflows/pages.yml) が走り、`dist/` を GitHub Pages に公開する。
 公開先: `https://max-enterme.github.io/obs-tachie-generator/`
 
-- 配信が `/obs-tachie-generator/` 配下になるため、ワークフローは `VITE_BASE=/obs-tachie-generator/` を付けてビルドする
-  （[`vite.config.ts`](vite.config.ts) の `base`）。付けないビルド（ローカル・Cloudflare）は `/` のまま。
-- リポジトリ設定: **Settings → Pages → Source = GitHub Actions**（初回のみ）。トークン等は不要。
-- フォークして別名にした場合も、ワークフローはリポジトリ名から自動で `VITE_BASE` を決める。
-- 手元での確認: `VITE_BASE=/obs-tachie-generator/ npm run build && npm run preview`
-
----
-
-# （旧）Cloudflare Workers / Static Assets
-
 本ツールは**純粋な静的SPA**（Vite + React + TypeScript、サーバー機能なし・ランタイムの秘密情報なし・
-画像は data URI としてクライアントで埋め込み）。そのため **Cloudflare Workers の Static Assets + Git 連携（Workers Builds）**
-でデプロイするのが最もシンプルで、**リポジトリに秘密情報（トークン等）を一切置かずに済む**。
+画像は data URI としてクライアントで埋め込み）。トークン等は一切要らない。
 
-Worker スクリプト（`main`）は持たず、[`wrangler.jsonc`](wrangler.jsonc) で `dist/` をアセットとして配信するだけの構成。
+- 配信が `/obs-tachie-generator/` 配下になるため、ワークフローは `VITE_BASE=/<リポジトリ名>/` を付けてビルドする
+  （[`vite.config.ts`](vite.config.ts) の `base`）。付けないビルド（ローカル開発）は `/` のまま。
+- リポジトリ設定: **Settings → Pages → Source = GitHub Actions**（初回のみ）。
+- Node は [`.node-version`](.node-version)（22）で固定。
+- lint / test の CI は Jenkins が正本。ワークフローは配信専用。
 
-## ビルド設定（Workers Builds）
-
-| 項目 | 値 |
-|---|---|
-| Project name | `obs-tachie-generator` |
-| Build command | `npm run build` |
-| Deploy command | `npx wrangler deploy` |
-| Production branch | `main` |
-| Node version | `22`（[`.node-version`](.node-version) で固定。CI と揃える。wrangler 4.x が Node >= 22 必須） |
-
-出力ディレクトリの指定欄は無い（`wrangler.jsonc` の `assets.directory = ./dist` が正）。
-環境変数・シークレットは**不要**（このアプリはビルド時にもランタイムにも秘密を使わない）。
-
-## 手順（Git 連携・推奨）
-
-1. Cloudflare ダッシュボード → **Workers & Pages** → **Create** → **Import a repository**
-2. リポジトリ `max-enterme/obs-tachie-generator` を選択
-3. 上の「ビルド設定」を入力して **Deploy**
-4. 発行された `https://<project>.<subdomain>.workers.dev` で動作確認
-5. （任意）**Custom domains** で独自ドメインを割り当て
-
-以降は `main` に push するたびに自動でビルド・デプロイされる。**トークン等はリポジトリに入らない**
-（Cloudflare 側がサーバーで GitHub を参照してビルドするため）。
-
-## ローカルからの手動デプロイ
-
-Git 連携とは別に、手元から直接デプロイもできる（初回のみ `npx wrangler login`）。
+## 手元での確認
 
 ```
-npm run deploy    # npm run build && wrangler deploy
+VITE_BASE=/obs-tachie-generator/ npm run build && npm run preview
 ```
 
-## フォークして自分でデプロイする場合
+## フォークして自分で公開する場合
 
-- 自分の Cloudflare アカウントで上記手順を実施する（メンテナのデプロイ先には影響しない）。
-- `wrangler.jsonc` の `name` を自分のプロジェクト名に変えるとよい。追加のシークレットは不要。
+自分のリポジトリで **Settings → Pages → Source = GitHub Actions** を選び、`main` に push する。
+`VITE_BASE` はワークフローがリポジトリ名から自動で決めるので、リポジトリ名を変えても設定変更は要らない。
 
-## （代替）GitHub Actions からデプロイする場合
+## 履歴
 
-Workers Builds ではなく CI からデプロイしたいときは [`cloudflare/wrangler-action`](https://github.com/cloudflare/wrangler-action)
-等を使い、次を **GitHub の Actions Secrets**（Settings → Secrets and variables → Actions）に設定する。
-**値はリポジトリに置かず、名前参照だけを YAML に書く。**
-
-| Secret 名 | 用途 |
-|---|---|
-| `CLOUDFLARE_API_TOKEN` | Workers 編集権限のみに絞った最小トークン |
-| `CLOUDFLARE_ACCOUNT_ID` | 対象アカウント ID |
-
-ワークフロー内では `${{ secrets.CLOUDFLARE_API_TOKEN }}` のように参照する。トークンは最小権限で発行し、
-使い回さないこと。
+2026-09-30 まで Cloudflare Workers（`obs-tachie-generator.max-enterme.workers.dev`）でも公開していた。
+GitHub Pages へ一本化して廃止した。
