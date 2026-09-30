@@ -1,4 +1,21 @@
-# デプロイ（Cloudflare Workers / Static Assets）
+# デプロイ
+
+主の公開先は **GitHub Pages**。旧公開先の Cloudflare Workers の手順も後半に残す。
+
+## GitHub Pages（現行）
+
+`main` への push で [`.github/workflows/pages.yml`](.github/workflows/pages.yml) が走り、`dist/` を Pages に公開する。
+公開先: `https://max-enterme.github.io/obs-tachie-generator/`
+
+- 配信が `/obs-tachie-generator/` 配下になるため、ワークフローは `VITE_BASE=/obs-tachie-generator/` を付けてビルドする
+  （[`vite.config.ts`](vite.config.ts) の `base`）。付けないビルド（ローカル・Cloudflare）は `/` のまま。
+- リポジトリ設定: **Settings → Pages → Source = GitHub Actions**（初回のみ）。トークン等は不要。
+- フォークして別名にした場合も、ワークフローはリポジトリ名から自動で `VITE_BASE` を決める。
+- 手元での確認: `VITE_BASE=/obs-tachie-generator/ npm run build && npm run preview`
+
+---
+
+# （旧）Cloudflare Workers / Static Assets
 
 本ツールは**純粋な静的SPA**（Vite + React + TypeScript、サーバー機能なし・ランタイムの秘密情報なし・
 画像は data URI としてクライアントで埋め込み）。そのため **Cloudflare Workers の Static Assets + Git 連携（Workers Builds）**

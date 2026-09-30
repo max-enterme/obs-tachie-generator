@@ -3,7 +3,7 @@
 OBS で Discord の通話相手を「立ち絵」で表示するための **Discord Streamkit 用カスタムCSS** を、
 ブラウザ上で生成する静的Webツール。
 
-**▶ https://obs-tachie-generator.max-enterme.workers.dev/** （インストール不要・ブラウザだけで使えます）
+**▶ https://max-enterme.github.io/obs-tachie-generator/** （インストール不要・ブラウザだけで使えます）
 
 ## 特徴（既存ツールとの差分）
 
@@ -80,11 +80,12 @@ Streamkit 互換フォーマットの正しさを vitest で固定していま�
 
 ## デプロイ
 
-公開先: **https://obs-tachie-generator.max-enterme.workers.dev/**
+公開先: **https://max-enterme.github.io/obs-tachie-generator/**
 
-**Cloudflare Workers（Static Assets）の Git 連携**（build: `npm run build` / deploy: `npx wrangler deploy` / Node 22）。
+**GitHub Pages**（GitHub Actions: [`.github/workflows/pages.yml`](.github/workflows/pages.yml)）。
 `main` に push すると自動でビルド・デプロイされます。純粋な静的SPAで**秘密情報を使わない**ため、
 リポジトリにトークン等は不要です。手順は [`DEPLOY.md`](DEPLOY.md) 参照。
+旧公開先の Cloudflare Workers（`workers.dev`）の設定も残しています（同 `DEPLOY.md`）。
 
 ## クレジット
 
@@ -93,7 +94,7 @@ alfe氏のコード・アセットは使用していません（inspired-by）�
 
 ## ライセンス
 
-[MIT](LICENSE)。フォークして自分の Cloudflare 等にデプロイして使えます（[`DEPLOY.md`](DEPLOY.md)）。
+[MIT](LICENSE)。フォークして自分の GitHub Pages / Cloudflare 等にデプロイして使えます（[`DEPLOY.md`](DEPLOY.md)）。
 
 ## 状態
 
