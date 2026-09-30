@@ -85,7 +85,6 @@ Streamkit 互換フォーマットの正しさを vitest で固定していま�
 **GitHub Pages**（GitHub Actions: [`.github/workflows/pages.yml`](.github/workflows/pages.yml)）。
 `main` に push すると自動でビルド・デプロイされます。純粋な静的SPAで**秘密情報を使わない**ため、
 リポジトリにトークン等は不要です。手順は [`DEPLOY.md`](DEPLOY.md) 参照。
-旧公開先の Cloudflare Workers（`workers.dev`）の設定も残しています（同 `DEPLOY.md`）。
 
 ## クレジット
 
@@ -94,7 +93,7 @@ alfe氏のコード・アセットは使用していません（inspired-by）�
 
 ## ライセンス
 
-[MIT](LICENSE)。フォークして自分の GitHub Pages / Cloudflare 等にデプロイして使えます（[`DEPLOY.md`](DEPLOY.md)）。
+[MIT](LICENSE)。フォークして自分の GitHub Pages 等にデプロイして使えます（[`DEPLOY.md`](DEPLOY.md)）。
 
 ## 状態
 
