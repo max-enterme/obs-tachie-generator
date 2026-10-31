@@ -25,3 +25,25 @@ export function useImageNaturalSize(imageUrl: string | undefined): Dimensions | 
 
   return size
 }
+
+/** 複数の画像URLの実サイズを測る。空URLと重複URLは測定しない。 */
+export function useImageNaturalSizes(imageUrls: string[]): Record<string, Dimensions> {
+  const [sizes, setSizes] = useState<Record<string, Dimensions>>({})
+  const imageUrlKey = [...new Set(imageUrls.filter((url) => url !== ''))].join('\u0000')
+
+  useEffect(() => {
+    let alive = true
+    setSizes({})
+    const uniqueUrls = imageUrlKey ? imageUrlKey.split('\u0000') : []
+    Promise.all(
+      uniqueUrls.map(async (url) => [url, await measureNaturalSize(url)] as const),
+    ).then((results) => {
+      if (alive) setSizes(Object.fromEntries(results.filter((entry): entry is readonly [string, Dimensions] => entry[1] !== null)))
+    })
+    return () => {
+      alive = false
+    }
+  }, [imageUrlKey])
+
+  return sizes
+}
