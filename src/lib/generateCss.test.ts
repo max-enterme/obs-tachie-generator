@@ -24,6 +24,65 @@ const USER_B: TachieUser = {
   imageUrl: 'data:image/png;base64,DDDDEEEEFFFF',
 }
 
+const MOUTH_USER: TachieUser = {
+  ...USER_A,
+  mouthImageUrl: 'data:image/png;base64,MMMMNNNN',
+}
+
+const PRE_MOUTH_CSS_WITH_SIZE = `:root {
+  /* ユーザーA (123456789012345678) */
+  --img-stand-url-123456789012345678: url("data:image/png;base64,AAAABBBBCCCC");
+}
+
+/* 立ち絵は body::after ただ1つで描画（唯一の描画源＝位置ズレが起きない）。
+   Streamkit の実要素は全部隠し、発話だけ検知して body::after を演出する。 */
+
+body, #root {
+  overflow: hidden !important;
+}
+
+/* 立ち絵（常時表示：通話に居ても居なくても同じ位置）
+   描画サイズ 600x900px は立ち絵画像の実サイズから算出。**画像を差し替えたらCSSを出し直すこと**。 */
+body::after {
+  content: "";
+  position: fixed;
+  left: 0px;
+  bottom: 0px;
+  display: block;
+  width: 600px;
+  height: 900px;
+  background-image: var(--img-stand-url-123456789012345678);
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+/* 発話中：非表示の実 img に付く Voice_avatarSpeaking__ を :has() で検知して body::after を演出 */
+body:has(img[src*="avatars/123456789012345678"][class*="Voice_avatarSpeaking__"])::after {
+  animation: 750ms infinite alternate ease-in-out speak-jump,750ms infinite alternate ease-in-out speak-light;
+}
+
+img {
+  display: none !important;
+}
+
+[class*="Voice_name__"], [class*="Voice_user__"] {
+  display: none !important;
+}
+
+@keyframes speak-jump {
+  0% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+  100% { transform: translateY(0); }
+}
+
+@keyframes speak-light {
+  0% { filter: drop-shadow(0 0 2px #FFFFFF) drop-shadow(2px 2px 0px #FFFFFF) drop-shadow(-2px -2px 0px #FFFFFF) drop-shadow(-2px 2px 0px #FFFFFF) drop-shadow(2px -2px 0px #FFFFFF); }
+  50% { filter: drop-shadow(0 0 8px #FFFFFF) drop-shadow(2px 2px 0px #FFFFFF) drop-shadow(-2px -2px 0px #FFFFFF) drop-shadow(-2px 2px 0px #FFFFFF) drop-shadow(2px -2px 0px #FFFFFF); }
+  100% { filter: drop-shadow(0 0 2px #FFFFFF) drop-shadow(2px 2px 0px #FFFFFF) drop-shadow(-2px -2px 0px #FFFFFF) drop-shadow(-2px 2px 0px #FFFFFF) drop-shadow(2px -2px 0px #FFFFFF); }
+}
+`
+
 type OptionsOverride = Partial<Omit<GenerateOptions, 'speak' | 'nameLabel'>> & {
   speak?: Partial<SpeakEffect>
   nameLabel?: Partial<NameLabel>
@@ -1003,6 +1062,65 @@ describe('generateCss (統一入口)', () => {
   it('ユーザー未登録なら案内コメントだけ返す', () => {
     const css = generateCss([], opts())
     expect(css).toContain('ユーザーが未登録')
+  })
+})
+
+describe('口パク', () => {
+  it('M10 口開き絵と実サイズがあれば変数・keyframe・animation が入る', () => {
+    const css = generateCss([MOUTH_USER], opts({ imageNaturalWidth: 600, imageNaturalHeight: 900 }))
+    expect(css).toContain('--img-mouth-url-123456789012345678: url("data:image/png;base64,MMMMNNNN");')
+    expect(css).toContain('@keyframes speak-mouth {')
+    expect(css).toContain('0% { background-image: var(--img-stand-url-123456789012345678); }')
+    expect(css).toContain('50% { background-image: var(--img-mouth-url-123456789012345678); }')
+    expect(css).toContain('animation: 750ms infinite alternate ease-in-out speak-jump,750ms infinite alternate ease-in-out speak-light,300ms infinite steps(1, end) speak-mouth;')
+  })
+
+  it('M11 演出を全部 OFF でも口パクだけで発話中ルールが出る', () => {
+    const css = generateCss([MOUTH_USER], opts({
+      imageNaturalWidth: 600,
+      imageNaturalHeight: 900,
+      speak: { bounce: false, outline: false, blink: false },
+    }))
+    expect(css).toContain('animation: 300ms infinite steps(1, end) speak-mouth;')
+    expect(css).not.toContain('speak-jump')
+    expect(css).not.toContain('speak-light')
+    expect(css).toContain('body:has(img[src*="avatars/123456789012345678"][class*="Voice_avatarSpeaking__"])::after')
+  })
+
+  it('M12 実サイズが無ければ口パクは入らない', () => {
+    expect(generateCss([MOUTH_USER], opts())).not.toMatch(/img-mouth-url|speak-mouth/)
+    expect(generateCss([MOUTH_USER], opts({ imageNaturalWidth: 600 }))).not.toMatch(/img-mouth-url|speak-mouth/)
+  })
+
+  it('M13 口開き絵が空・空白なら従来と完全一致', () => {
+    const o = opts({ imageNaturalWidth: 600, imageNaturalHeight: 900 })
+    const css = generateCss([USER_A], o)
+    expect(generateCss([{ ...USER_A, mouthImageUrl: '  ' }], o)).toBe(css)
+    expect(generateCss([{ ...USER_A, mouthImageUrl: undefined }], o)).toBe(css)
+    expect(css).toBe(PRE_MOUTH_CSS_WITH_SIZE)
+  })
+
+  it('M14 周期が反映され、下限で丸まる', () => {
+    const sized = { imageNaturalWidth: 600, imageNaturalHeight: 900 }
+    expect(generateCss([MOUTH_USER], opts({ ...sized, mouthIntervalMs: 120 }))).toContain('120ms infinite steps(1, end) speak-mouth')
+    expect(generateCss([MOUTH_USER], opts({ ...sized, mouthIntervalMs: 10 }))).toContain('50ms infinite steps(1, end) speak-mouth')
+    expect(generateCss([MOUTH_USER], opts(sized))).toContain('300ms infinite steps(1, end) speak-mouth')
+  })
+
+  it('M15 静かな人を暗くする設定と併用できる', () => {
+    const css = generateCss([MOUTH_USER], opts({
+      imageNaturalWidth: 600,
+      imageNaturalHeight: 900,
+      dimWhenQuiet: true,
+      speak: { bounce: false, outline: false, blink: false },
+    }))
+    expect(css).toContain('filter: brightness(100%);')
+    expect(css).toContain('speak-mouth')
+  })
+
+  it('M16 まとめ版には出さない', () => {
+    const css = generateCombinedCss([MOUTH_USER], opts())
+    expect(css).not.toMatch(/img-mouth-url|speak-mouth/)
   })
 })
 

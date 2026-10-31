@@ -1,5 +1,6 @@
 import {
   DIM_BRIGHTNESS_PCT,
+  resolveMouthIntervalMs,
   resolveAnchors,
   resolveDisplayName,
   type AnchorX,
@@ -478,6 +479,13 @@ const KEYFRAMES_BLINK = `@keyframes speak-blink {
   100% { opacity: 1; }
 }`
 
+const KEYFRAMES_MOUTH = (id: string) => `/* 口パク：話している間だけ立ち絵（口閉じ）と口開き絵を交互に出す。口開き絵は立ち絵と同じ縦横比で用意すること */
+@keyframes speak-mouth {
+  0% { background-image: var(--img-stand-url-${id}); }
+  50% { background-image: var(--img-mouth-url-${id}); }
+  100% { background-image: var(--img-stand-url-${id}); }
+}`
+
 /** 有効な演出を列挙する。空（3種すべて off）なら発話演出は出さない＝静止。 */
 function activeEffects(speak: SpeakEffect): Effect[] {
   const effects: Effect[] = []
@@ -495,12 +503,16 @@ function animationValue(effects: Effect[], durationMs: number): string {
 }
 
 /** `:root` の変数ブロック（立ち絵 data URI の埋め込み）。 */
-function rootBlock(users: TachieUser[]): string {
+function rootBlock(users: TachieUser[], withMouth = false): string {
   const lines = users.flatMap((u) => {
     const id = safeId(u.id)
     // メモ名は素通しするとコメントを閉じて任意CSSを差し込めてしまう（cssComment で潰す）。
     const label = u.name ? `  /* ${cssComment(u.name)} (${id}) */` : `  /* ${id} */`
-    return [label, `  --img-stand-url-${id}: ${cssUrl(u.imageUrl)};`]
+    return [
+      label,
+      `  --img-stand-url-${id}: ${cssUrl(u.imageUrl)};`,
+      ...(withMouth && u.mouthImageUrl ? [`  --img-mouth-url-${id}: ${cssUrl(u.mouthImageUrl)};`] : []),
+    ]
   })
   return `:root {\n${lines.join('\n')}\n}`
 }
@@ -560,6 +572,7 @@ export function generateStandaloneCss(user: TachieUser, options: GenerateOptions
   // 実寸(横・縦)がそろっているときだけ背景画像方式で描く（箱の大きさ = 描かれる絵の大きさ）。
   // そろわなければ従来の content 方式に戻す（読み込み中・読めない URL でも表示は保つ）。
   const box = tachieBoxSize(width, imageNaturalWidth, imageNaturalHeight)
+  const mouthOn = box != null && (user.mouthImageUrl ?? '').trim() !== ''
 
   const afterDecls = box
     ? [
@@ -594,7 +607,7 @@ export function generateStandaloneCss(user: TachieUser, options: GenerateOptions
     : `/* 立ち絵（常時表示：通話に居ても居なくても同じ位置） */`
 
   const parts: string[] = [
-    rootBlock([user]),
+    rootBlock([user], mouthOn),
     `/* 立ち絵は body::after ただ1つで描画（唯一の描画源＝位置ズレが起きない）。
    Streamkit の実要素は全部隠し、発話だけ検知して body::after を演出する。 */`,
     `body, #root {\n  overflow: hidden !important;\n}`,
@@ -606,14 +619,18 @@ export function generateStandaloneCss(user: TachieUser, options: GenerateOptions
   if (nameCss) parts.push(nameCss)
 
   // 発話中のルール：演出があるか、暗転解除（dim）が要るなら出す
-  if (effects.length > 0 || dimWhenQuiet) {
+  if (effects.length > 0 || dimWhenQuiet || mouthOn) {
     const speakingDecls: string[] = []
     // outline アニメが filter を持つ場合はそれで明るさが戻る。それ以外は明示的に戻す。
     if (dimWhenQuiet && !effects.includes('light')) {
       speakingDecls.push(`  filter: brightness(100%);`)
     }
-    if (effects.length > 0) {
-      speakingDecls.push(`  animation: ${animationValue(effects, speak.durationMs)};`)
+    const animations = [
+      ...(effects.length > 0 ? [animationValue(effects, speak.durationMs)] : []),
+      ...(mouthOn ? [`${resolveMouthIntervalMs(options.mouthIntervalMs)}ms infinite steps(1, end) speak-mouth`] : []),
+    ]
+    if (animations.length > 0) {
+      speakingDecls.push(`  animation: ${animations.join(',')};`)
     }
     parts.push(
       `/* 発話中：非表示の実 img に付く Voice_avatarSpeaking__ を :has() で検知して body::after を演出 */
@@ -647,6 +664,7 @@ ${selectors.join(',\n')} {
       nameCss ? '/* Streamkit のアカウント名は隠す（名前は上のブロックで出す） */\n' : ''
     }[class*="Voice_name__"], [class*="Voice_user__"] {\n  display: none !important;\n}`,
     ...keyframeBlocks(effects, speak, 'transform', pos.transforms),
+    ...(mouthOn ? [KEYFRAMES_MOUTH(id)] : []),
   )
 
   return parts.join('\n\n') + '\n'
