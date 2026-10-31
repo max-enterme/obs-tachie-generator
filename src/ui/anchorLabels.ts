@@ -12,10 +12,14 @@ export const ANCHOR_LABEL: Record<AnchorY, Record<AnchorX, string>> = {
 
 /** オフセット入力のラベル。「アンカーからの距離」なので、アンカーで意味が変わる。 */
 export const OFFSET_X_LABEL: Record<AnchorX, string> = {
-  left: '左端からの距離(px)', center: '横中央からのズレ(px)', right: '右端からの距離(px)',
+  left: '左端からの距離(px)',
+  center: '横中央からのズレ(px)',
+  right: '右端からの距離(px)',
 }
 export const OFFSET_Y_LABEL: Record<AnchorY, string> = {
-  bottom: '下端からの距離(px)', middle: '縦中央からのズレ(px)', top: '上端からの距離(px)',
+  bottom: '下端からの距離(px)',
+  middle: '縦中央からのズレ(px)',
+  top: '上端からの距離(px)',
 }
 /** 中央アンカーは「距離」ではなく符号付きのズレなので、向きを補足する。 */
 export const OFFSET_X_HINT: Partial<Record<AnchorX, string>> = { center: '正で右' }
