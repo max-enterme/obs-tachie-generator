@@ -4,14 +4,17 @@ import {
   DEFAULT_ANCHOR_Y,
   DEFAULT_OPTIONS,
   makeDefaultPreset,
+  renderUser,
   presetToOptions,
   resetPresetOptions,
   resolveAnchorX,
   resolveAnchorY,
   resolveAnchors,
+  resolveMouthIntervalMs,
   type AnchorX,
   type AnchorY,
   type Preset,
+  type AppUser,
 } from './types'
 
 const ANCHOR_XS: AnchorX[] = ['left', 'center', 'right']
@@ -79,6 +82,37 @@ describe('presetToOptions', () => {
     expect(o.imageNaturalWidth).toBe(600)
     expect(o.imageNaturalHeight).toBe(900)
   })
+
+  it('M2 口パクの周期を渡す', () => {
+    expect(presetToOptions({ ...base, mouthIntervalMs: 120 }).mouthIntervalMs).toBe(120)
+    expect(presetToOptions(base).mouthIntervalMs).toBeUndefined()
+  })
+})
+
+describe('resolveMouthIntervalMs', () => {
+  it('M1 既定・下限・そのまま', () => {
+    expect(resolveMouthIntervalMs(undefined)).toBe(300)
+    expect(resolveMouthIntervalMs(0)).toBe(300)
+    expect(resolveMouthIntervalMs(-5)).toBe(300)
+    expect(resolveMouthIntervalMs(Number.NaN)).toBe(300)
+    expect(resolveMouthIntervalMs(10)).toBe(50)
+    expect(resolveMouthIntervalMs(50)).toBe(50)
+    expect(resolveMouthIntervalMs(120)).toBe(120)
+  })
+})
+
+describe('renderUser', () => {
+  const user: AppUser = { id: '1', name: 'ユーザーA' }
+
+  it('M3 口開き絵を渡し、空は undefined', () => {
+    expect(
+      renderUser(user, { ...makeDefaultPreset('p1'), mouthImageUrl: 'data:x' }).mouthImageUrl,
+    ).toBe('data:x')
+    expect(
+      renderUser(user, { ...makeDefaultPreset('p1'), mouthImageUrl: '' }).mouthImageUrl,
+    ).toBeUndefined()
+    expect(renderUser(user, makeDefaultPreset('p1')).mouthImageUrl).toBeUndefined()
+  })
 })
 
 describe('既定プリセット', () => {
@@ -107,5 +141,17 @@ describe('既定プリセット', () => {
     expect(reset.bottom).toBe(DEFAULT_OPTIONS.bottom)
     expect(reset.name).toBe('プリセットA')
     expect(reset.imageUrl).toBe('data:image/png;base64,AAAA')
+  })
+
+  it('M4 resetPresetOptions は口開き絵を保持し周期は既定へ', () => {
+    const reset = resetPresetOptions({
+      ...makeDefaultPreset('p1'),
+      imageUrl: 'data:a',
+      mouthImageUrl: 'data:b',
+      mouthIntervalMs: 120,
+    })
+    expect(reset.mouthImageUrl).toBe('data:b')
+    expect(reset.mouthIntervalMs).toBeUndefined()
+    expect(reset.imageUrl).toBe('data:a')
   })
 })
