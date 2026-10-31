@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, waitForElementToBeRemoved } from '@testing-library/react'
 import App from './App'
 
 vi.mock('./lib/image', async (orig) => ({
@@ -21,6 +21,26 @@ async function addPresetWithImage(dataUri: string) {
 }
 
 describe('口パクの縦横比警告', () => {
+  it('口開き絵を外すと設定メッセージが消える', async () => {
+    render(<App />)
+    await addPresetWithImage('data:image/png;base64,AAAA')
+    fireEvent.change(screen.getByLabelText('口開き絵のURL'), { target: { value: 'data:image/png;base64,BBBB' } })
+    fireEvent.click(screen.getByRole('button', { name: '口開き絵のURLを反映' }))
+    expect(await screen.findByText(/口開き絵を設定しました/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '口開き絵を外す' }))
+    expect(screen.queryByText(/口開き絵を設定しました/)).not.toBeInTheDocument()
+  })
+
+  it('確定した説明文と注意、周期の補足を表示する', async () => {
+    render(<App />)
+    await addPresetWithImage('data:image/png;base64,AAAA')
+    expect(screen.getByText('口パク（任意）')).toBeInTheDocument()
+    expect(screen.getByText('話している間だけ、立ち絵と『口開き』の絵を交互に切り替えます。声の大きさには連動しません。')).toBeInTheDocument()
+    expect(screen.getByText('立ち絵と同じ縦横比・同じ構図で用意してください（立ち絵だけを切り抜くとズレます）')).toBeInTheDocument()
+    expect(screen.getByText('口閉じ→口開き→口閉じの1往復の長さ')).toBeInTheDocument()
+    expect(screen.getByLabelText(/口パクの周期\(ms\)/)).toBeDisabled()
+  })
+
   it('M22 縦横比が違うと警告し、同じなら出さない', async () => {
     render(<App />)
     await addPresetWithImage('data:image/png;base64,AAAA')
@@ -29,7 +49,9 @@ describe('口パクの縦横比警告', () => {
     expect(await screen.findByText(/口開き絵の縦横比が立ち絵と違います（立ち絵 600×900 \/ 口開き 600×600）/)).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('口開き絵のURL'), { target: { value: 'data:image/png;base64,AAAA' } })
     fireEvent.click(screen.getByRole('button', { name: '口開き絵のURLを反映' }))
+    const warning = screen.getByRole('alert')
+    await waitForElementToBeRemoved(warning)
     expect(await screen.findByText(/口開き絵を設定しました/)).toBeInTheDocument()
-    expect(screen.queryByText(/口開き絵の縦横比が立ち絵と違います/)).toBeNull()
+    await waitFor(() => expect(screen.queryByText(/口開き絵の縦横比が立ち絵と違います/)).toBeNull())
   })
 })

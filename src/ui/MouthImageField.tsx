@@ -45,13 +45,15 @@ export default function MouthImageField({ preset, maxWidth, onChange }: Props): 
     } catch { setError('画像の読み込みに失敗しました。') } finally { setBusy(false) }
   }
   return <>
-    <div className="subhead">口パク</div>
+    <div className="subhead">口パク（任意）</div>
+    <p>話している間だけ、立ち絵と『口開き』の絵を交互に切り替えます。声の大きさには連動しません。</p>
+    <small>立ち絵と同じ縦横比・同じ構図で用意してください（立ち絵だけを切り抜くとズレます）</small>
     {!enabled && <p className="hint" style={{ color: 'var(--warn)' }} role="status">先に上の「立ち絵画像」を設定してください。</p>}
     <div className="field"><label htmlFor="pr-mouth-file">口開き絵のアップロード</label><input id="pr-mouth-file" type="file" accept="image/*" disabled={!enabled || busy} onChange={e=>void onFile(e.currentTarget.files?.[0])}/></div>
     <div className="field"><label htmlFor="pr-mouth-url">口開き絵のURL</label><input id="pr-mouth-url" type="url" value={url} disabled={!enabled || busy} onChange={e=>setUrl(e.target.value)}/></div>
     <button type="button" disabled={!enabled || busy} onClick={()=>void applyUrl()}>口開き絵のURLを反映</button>
-    {mouth && <div className="preset-image-row"><span className="thumb lg"><img src={mouth} alt="口開き絵"/></span><button type="button" onClick={()=>onChange({...preset,mouthImageUrl:undefined,mouthIntervalMs:undefined})}>口開き絵を外す</button></div>}
-    <div className="field"><label htmlFor="pr-mouth-ms">口パクの周期(ms){!mouth && enabled && <small>口開き絵を設定すると使えます</small>}</label><input id="pr-mouth-ms" type="number" min={50} step={10} disabled={!enabled || !mouth} value={preset.mouthIntervalMs ?? DEFAULT_MOUTH_INTERVAL_MS} onChange={e=>onChange({...preset,mouthIntervalMs:e.target.value === '' ? undefined : Number(e.target.value)})}/></div>
+    {mouth && <div className="preset-image-row"><span className="thumb lg"><img src={mouth} alt="口開き絵"/></span><button type="button" onClick={()=>{setInfo(''); onChange({...preset,mouthImageUrl:undefined,mouthIntervalMs:undefined})}}>口開き絵を外す</button></div>}
+    <div className="field"><label htmlFor="pr-mouth-ms">口パクの周期(ms)</label><small>口閉じ→口開き→口閉じの1往復の長さ</small>{!mouth && enabled && <small>口開き絵を設定すると使えます</small>}<input id="pr-mouth-ms" type="number" min={50} step={10} disabled={!enabled || !mouth} value={preset.mouthIntervalMs ?? DEFAULT_MOUTH_INTERVAL_MS} onChange={e=>onChange({...preset,mouthIntervalMs:e.target.value === '' ? undefined : Number(e.target.value)})}/></div>
     {note && <p className="hint" style={{color:'var(--danger)'}} role="alert">{note}</p>}{busy && <p className="hint">処理中…</p>}{info && <p className="hint">{info}</p>}{error && <p className="hint" style={{color:'var(--danger)'}} role="alert">{error}</p>}
   </>
 }
