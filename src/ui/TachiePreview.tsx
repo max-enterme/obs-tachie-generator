@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import {
   ALIGN_HANDLE,
   cssColorWithOpacity,
@@ -11,7 +11,7 @@ import {
   type AxisPlacement,
   type Placement,
 } from '../lib/generateCss'
-import { resolveAnchors, type Preset } from '../lib/types'
+import { mouthIntervalForPreset, resolveAnchors, type Preset } from '../lib/types'
 
 interface Props {
   /** プレビューに映すプリセット（見た目の source）。null なら空ビューポート。 */
@@ -101,6 +101,16 @@ export default function TachiePreview({
 
   // 発話演出が出るのは「通話中 かつ 発話中」だけ。
   const effectiveSpeaking = inCall && speaking
+  const mouthUrl = (preset?.mouthImageUrl ?? '').trim()
+  const mouthInterval = preset ? mouthIntervalForPreset(preset) : 0
+  const [mouthOpen, setMouthOpen] = useState(false)
+  useEffect(() => {
+    if (effectiveSpeaking && mouthUrl !== '') {
+      const t = window.setInterval(() => setMouthOpen((o) => !o), mouthInterval / 2)
+      return () => { window.clearInterval(t); setMouthOpen(false) }
+    }
+    setMouthOpen(false)
+  }, [effectiveSpeaking, mouthUrl, mouthInterval])
   // 幅は 明示指定 > 画像の実サイズ > 仮幅 の順。
   const effWidth = width ?? naturalW ?? FALLBACK_WIDTH
   const widthPct = (effWidth / REF_W) * 100
@@ -264,11 +274,13 @@ export default function TachiePreview({
             <img
               className="tp-img"
               style={figStyle}
-              src={preset.imageUrl}
+              src={mouthOpen && mouthUrl !== '' ? preset.mouthImageUrl : preset.imageUrl}
               alt={preset.name || 'プリセット'}
               onLoad={(e) => {
-                const w = e.currentTarget.naturalWidth
                 const url = e.currentTarget.getAttribute('src') ?? ''
+                // 口開き絵の読み込みでは実幅を記録しない（箱の大きさは立ち絵が基準）。
+                if (url !== preset.imageUrl) return
+                const w = e.currentTarget.naturalWidth
                 setMeasured(w ? { url, width: w } : null)
               }}
             />

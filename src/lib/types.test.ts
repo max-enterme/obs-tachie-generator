@@ -3,15 +3,21 @@ import {
   DEFAULT_ANCHOR_X,
   DEFAULT_ANCHOR_Y,
   DEFAULT_OPTIONS,
+  DEFAULT_SPEAK,
   makeDefaultPreset,
+  renderUser,
   presetToOptions,
   resetPresetOptions,
   resolveAnchorX,
   resolveAnchorY,
   resolveAnchors,
+  resolveMouthIntervalMs,
+  resolveMouthPerMove,
+  mouthIntervalForPreset,
   type AnchorX,
   type AnchorY,
   type Preset,
+  type AppUser,
 } from './types'
 
 const ANCHOR_XS: AnchorX[] = ['left', 'center', 'right']
@@ -79,6 +85,52 @@ describe('presetToOptions', () => {
     expect(o.imageNaturalWidth).toBe(600)
     expect(o.imageNaturalHeight).toBe(900)
   })
+
+  it('M2 口パクの周期は動きに合わせる', () => {
+    expect(presetToOptions({ ...base, speak: { ...base.speak, durationMs: 600 }, mouthPerMove: 3 }).mouthIntervalMs).toBe(200)
+    expect(presetToOptions(base).mouthIntervalMs).toBe(375)
+  })
+})
+
+describe('resolveMouthIntervalMs', () => {
+  it('M1 既定・下限・そのまま', () => {
+    expect(resolveMouthIntervalMs(undefined)).toBe(300)
+    expect(resolveMouthIntervalMs(0)).toBe(300)
+    expect(resolveMouthIntervalMs(-5)).toBe(300)
+    expect(resolveMouthIntervalMs(Number.NaN)).toBe(300)
+    expect(resolveMouthIntervalMs(10)).toBe(50)
+    expect(resolveMouthIntervalMs(50)).toBe(50)
+    expect(resolveMouthIntervalMs(120)).toBe(120)
+  })
+})
+
+describe('resolveMouthPerMove', () => {
+  it('C1-1 1〜4 の整数だけ通す', () => {
+    expect([undefined, 0, 5, 1.5, Number.NaN, 1, 4].map(resolveMouthPerMove)).toEqual([2, 2, 2, 2, 2, 1, 4])
+  })
+})
+
+describe('mouthIntervalForPreset', () => {
+  it('C1-2 動きの周期 ÷ 回数、下限は 50', () => {
+    expect(mouthIntervalForPreset({ speak: { ...DEFAULT_SPEAK, durationMs: 750 } })).toBe(375)
+    expect(mouthIntervalForPreset({ speak: { ...DEFAULT_SPEAK, durationMs: 600 }, mouthPerMove: 3 })).toBe(200)
+    expect(mouthIntervalForPreset({ speak: { ...DEFAULT_SPEAK, durationMs: 750 }, mouthPerMove: 4 })).toBe(187.5)
+    expect(mouthIntervalForPreset({ speak: { ...DEFAULT_SPEAK, durationMs: 100 }, mouthPerMove: 4 })).toBe(50)
+  })
+})
+
+describe('renderUser', () => {
+  const user: AppUser = { id: '1', name: 'ユーザーA' }
+
+  it('M3 口開き絵を渡し、空は undefined', () => {
+    expect(
+      renderUser(user, { ...makeDefaultPreset('p1'), mouthImageUrl: 'data:x' }).mouthImageUrl,
+    ).toBe('data:x')
+    expect(
+      renderUser(user, { ...makeDefaultPreset('p1'), mouthImageUrl: '' }).mouthImageUrl,
+    ).toBeUndefined()
+    expect(renderUser(user, makeDefaultPreset('p1')).mouthImageUrl).toBeUndefined()
+  })
 })
 
 describe('既定プリセット', () => {
@@ -107,5 +159,17 @@ describe('既定プリセット', () => {
     expect(reset.bottom).toBe(DEFAULT_OPTIONS.bottom)
     expect(reset.name).toBe('プリセットA')
     expect(reset.imageUrl).toBe('data:image/png;base64,AAAA')
+  })
+
+  it('M4 resetPresetOptions は口開き絵を保持し回数は既定へ', () => {
+    const reset = resetPresetOptions({
+      ...makeDefaultPreset('p1'),
+      imageUrl: 'data:a',
+      mouthImageUrl: 'data:b',
+      mouthPerMove: 3,
+    })
+    expect(reset.mouthImageUrl).toBe('data:b')
+    expect(reset.mouthPerMove).toBeUndefined()
+    expect(reset.imageUrl).toBe('data:a')
   })
 })

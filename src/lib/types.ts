@@ -11,6 +11,8 @@ export interface TachieUser {
    * 外部URLも指定できるが、Streamkit の CSP に阻まれるホストは表示されない。
    */
   imageUrl: string
+  /** 口開き絵。空・未指定なら口パクなし。 */
+  mouthImageUrl?: string
 }
 
 /**
@@ -165,6 +167,8 @@ export interface GenerateOptions {
   imageNaturalWidth?: number
   /** 立ち絵画像の実サイズ(高さ px)。imageNaturalWidth と対で、立ち絵の描画サイズ(背景方式)に使う。 */
   imageNaturalHeight?: number
+  /** 口パクの周期(ms)。未指定は {@link DEFAULT_MOUTH_INTERVAL_MS}。 */
+  mouthIntervalMs?: number
 }
 
 /** 「静かな人を暗くする」で非発話時に掛ける明るさ(%)。 */
@@ -212,6 +216,10 @@ export interface Preset {
   speak: SpeakEffect
   /** 名前ラベルの見た目（テキストはユーザー側）。 */
   nameLabel: NameLabel
+  /** 口開き絵。空・未指定なら口パクなし。 */
+  mouthImageUrl?: string
+  /** 動き 1 回あたりの口パク回数(1〜4)。未指定は 2。 */
+  mouthPerMove?: number
 }
 
 /** 出力する「ユーザー × プリセット」の明示ペア（多対多）。保存リストの1件。 */
@@ -264,6 +272,7 @@ export function presetToOptions(
     hideWhenAway: p.hideWhenAway,
     speak: p.speak,
     nameLabel: p.nameLabel,
+    mouthIntervalMs: mouthIntervalForPreset(p),
     imageNaturalWidth,
     imageNaturalHeight,
   }
@@ -271,7 +280,13 @@ export function presetToOptions(
 
 /** ユーザー（誰）とプリセット（見た目）を合成して generateCss の描画入力 {@link TachieUser} を作る。 */
 export function renderUser(u: AppUser, p: Preset): TachieUser {
-  return { id: u.id, name: u.name, displayName: u.displayName, imageUrl: p.imageUrl }
+  return {
+    id: u.id,
+    name: u.name,
+    displayName: u.displayName,
+    imageUrl: p.imageUrl,
+    mouthImageUrl: p.mouthImageUrl || undefined,
+  }
 }
 
 /** 画面に出す名前を決める（`displayName` 優先・空ならメモ用の `name`）。空文字なら名前を出さない。 */
@@ -297,9 +312,14 @@ export function makeDefaultPreset(id: string): Preset {
   }
 }
 
-/** プリセットのオプション値（位置/サイズ/演出/暗転/隠す）を既定に戻す（名前・画像は保持）。 */
+/** プリセットのオプション値を既定に戻す（名前・立ち絵・口開き絵は保持）。 */
 export function resetPresetOptions(p: Preset): Preset {
-  return { ...makeDefaultPreset(p.id), name: p.name, imageUrl: p.imageUrl }
+  return {
+    ...makeDefaultPreset(p.id),
+    name: p.name,
+    imageUrl: p.imageUrl,
+    mouthImageUrl: p.mouthImageUrl,
+  }
 }
 
 /**
@@ -335,6 +355,28 @@ export const DEFAULT_NAME_LABEL: NameLabel = {
   backgroundPadY: 6,
   backgroundRadius: 6,
   fit: 'text',
+}
+
+/** 口パクの周期(ms)の既定。口閉じ→口開き→口閉じの 1 往復の長さ。 */
+export const DEFAULT_MOUTH_INTERVAL_MS = 300
+/** 口パクの周期(ms)の下限。これ未満は丸める。 */
+export const MIN_MOUTH_INTERVAL_MS = 50
+/** 未指定・非数・0 以下は 300ms、1〜49ms は 50ms、それ以外はそのまま。 */
+export function resolveMouthIntervalMs(v?: number): number {
+  if (v === undefined || !Number.isFinite(v) || v <= 0) return DEFAULT_MOUTH_INTERVAL_MS
+  if (v < MIN_MOUTH_INTERVAL_MS) return MIN_MOUTH_INTERVAL_MS
+  return v
+}
+
+/** 動き 1 回あたりの口パク回数の選択肢。 */
+export const MOUTH_PER_MOVE_CHOICES = [1, 2, 3, 4] as const
+/** 1〜4 の整数ならそのまま、それ以外は 2。 */
+export function resolveMouthPerMove(v?: number): number {
+  return Number.isInteger(v) && v! >= 1 && v! <= 4 ? v! : 2
+}
+/** 口パク周期(ms) = 動きの周期 ÷ 口パク回数。 */
+export function mouthIntervalForPreset(p: Pick<Preset, 'speak' | 'mouthPerMove'>): number {
+  return resolveMouthIntervalMs(p.speak.durationMs / resolveMouthPerMove(p.mouthPerMove))
 }
 
 /** 既定の演出。 */

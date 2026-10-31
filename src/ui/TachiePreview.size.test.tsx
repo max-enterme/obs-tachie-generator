@@ -1,8 +1,8 @@
-import { cleanup, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { useLayoutEffect } from 'react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import TachiePreview from './TachiePreview'
-import { makeDefaultPreset, type Preset } from '../lib/types'
+import { DEFAULT_SPEAK, makeDefaultPreset, type Preset } from '../lib/types'
 
 /**
  * 画像の読み込み完了（load）を、React が描画を確定した直後・effect が走る前に起こす。
@@ -55,5 +55,33 @@ describe('TachiePreview 原寸幅（画像の実サイズ）', () => {
     // load を起こさない素の TachiePreview に差し替え＝新しい画像はまだ読み込み中。
     rerender(<TachiePreview preset={{ ...base, imageUrl: 'data:other' }} />)
     expect(imgWidth(container)).toBe('20%')
+  })
+
+  it('口パクで口開き絵が読み込まれても、立ち絵の実サイズの幅のまま', () => {
+    vi.useFakeTimers()
+    try {
+      const preset: Preset = {
+        ...makeDefaultPreset('p1'),
+        width: undefined,
+        imageUrl: 'data:stand',
+        mouthImageUrl: 'data:mouth',
+        speak: { ...DEFAULT_SPEAK, durationMs: 600 },
+        mouthPerMove: 2,
+      }
+      const { container } = render(<TachiePreview preset={preset} />)
+      const img = () => container.querySelector<HTMLImageElement>('img.tp-img')!
+      Object.defineProperty(img(), 'naturalWidth', { configurable: true, value: 960 })
+      fireEvent.load(img())
+      expect(imgWidth(container)).toBe('50%')
+      // 発話にして口開き絵へ切り替わったところで、口開き絵の load（別の実サイズ）が来る。
+      fireEvent.click(screen.getByRole('button', { name: /現在: 通話中・静か$/ }))
+      act(() => vi.advanceTimersByTime(150))
+      expect(img().getAttribute('src')).toBe('data:mouth')
+      Object.defineProperty(img(), 'naturalWidth', { configurable: true, value: 300 })
+      fireEvent.load(img())
+      expect(imgWidth(container)).toBe('50%')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

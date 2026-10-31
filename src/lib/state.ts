@@ -151,6 +151,14 @@ function normalizePreset(raw: unknown): Preset | null {
       typeof o.hideWhenAway === 'boolean' ? o.hideWhenAway : DEFAULT_OPTIONS.hideWhenAway,
     speak: normalizeSpeak(o.speak),
     nameLabel: normalizeNameLabel(o.nameLabel),
+    mouthImageUrl:
+      typeof o.mouthImageUrl === 'string' && o.mouthImageUrl.trim() !== ''
+        ? o.mouthImageUrl
+        : undefined,
+    mouthPerMove:
+      typeof o.mouthPerMove === 'number' && Number.isInteger(o.mouthPerMove) && o.mouthPerMove >= 1 && o.mouthPerMove <= 4
+        ? o.mouthPerMove
+        : undefined,
   }
 }
 

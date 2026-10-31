@@ -27,6 +27,52 @@ describe('App', () => {
     expect(screen.getByText(/まだ登録がありません/)).toBeInTheDocument()
   })
 
+  it('M19 口開き絵を URL で設定・外せる', async () => {
+    render(<App />)
+    await addPresetWithImage('data:image/png;base64,AAAA')
+    fireEvent.change(screen.getByLabelText('口開き絵のURL'), { target: { value: 'data:image/png;base64,BBBB' } })
+    fireEvent.click(screen.getByRole('button', { name: '口開き絵のURLを反映' }))
+    expect(await screen.findByText(/口開き絵を設定しました/)).toBeInTheDocument()
+    expect(screen.getByLabelText(/口パクの回数/)).toBeEnabled()
+    expect(screen.getByRole('button', { name: '口開き絵を外す' })).toBeEnabled()
+    fireEvent.click(screen.getByRole('button', { name: '口開き絵を外す' }))
+    expect(screen.getByLabelText(/口パクの回数/)).toBeDisabled()
+    expect(screen.queryByRole('button', { name: '口開き絵を外す' })).not.toBeInTheDocument()
+  })
+
+  it('M20 立ち絵が未設定なら口開き絵の欄は使えない', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: /次へ/ }))
+    fireEvent.click(screen.getByRole('button', { name: /新規プリセット/ }))
+    expect(screen.getByText(/先に上の「立ち絵画像」を設定してください/)).toBeInTheDocument()
+    expect(screen.getByLabelText('口開き絵のURL')).toBeDisabled()
+    expect(screen.getByRole('button', { name: '口開き絵のURLを反映' })).toBeDisabled()
+    expect(screen.getByLabelText(/口パクの回数/)).toBeDisabled()
+  })
+
+  it('M21 実サイズが測れないときだけ出力パネルに注意', async () => {
+    render(<App />)
+    await addPresetWithImage('data:image/png;base64,AAAA')
+    fireEvent.click(screen.getByRole('button', { name: /次へ/ }))
+    expect(screen.queryByText(/口パクは出力CSSに入りません/)).toBeNull()
+  })
+
+  it('M21 口開き絵があり実サイズが測れないと出力注意を出す', async () => {
+    render(<App />)
+    fireEvent.change(screen.getByLabelText('Discord ユーザーID'), {
+      target: { value: '123456789012345678' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '追加' }))
+    await addPresetWithImage('data:image/png;base64,AAAA')
+    fireEvent.change(screen.getByLabelText('口開き絵のURL'), { target: { value: 'data:image/png;base64,BBBB' } })
+    fireEvent.click(screen.getByRole('button', { name: '口開き絵のURLを反映' }))
+    expect(await screen.findByText(/口開き絵を設定しました/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /次へ/ }))
+    expect(screen.getByText(/口パクは出力CSSに入りません/)).toBeInTheDocument()
+    const panel = screen.getByRole('heading', { name: /出力 CSS/ }).closest('.panel')!
+    expect(within(panel as HTMLElement).getByRole<HTMLTextAreaElement>('textbox').value).not.toContain('speak-mouth')
+  })
+
   it('ユーザー追加 → プリセット＋画像 → ③選択で出力CSSに反映される', async () => {
     render(<App />)
 

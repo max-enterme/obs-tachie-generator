@@ -40,6 +40,33 @@ describe('normalizeState', () => {
     expect(s.selection).toEqual({ userId: '1', presetId: 'p1' })
   })
 
+  it('M5 口パクの無い旧データは口パクなし', () => {
+    const s = normalizeState({ users: [], presets: [{ id: 'p1' }] })
+    expect(s.presets[0].mouthImageUrl).toBeUndefined()
+    expect(s.presets[0].mouthPerMove).toBeUndefined()
+  })
+
+  it('M6 口パクの不正値は落とし、正しい値は残す', () => {
+    const s = normalizeState({
+      users: [],
+      presets: [
+        { id: 'a', mouthImageUrl: '   ', mouthPerMove: 0 },
+        { id: 'b', mouthImageUrl: 5, mouthPerMove: 'x' },
+        { id: 'c', mouthImageUrl: 'data:m', mouthPerMove: 3 },
+        { id: 'd', mouthPerMove: 1.5 },
+        { id: 'e', mouthIntervalMs: 120 },
+      ],
+    })
+    expect(s.presets[0].mouthImageUrl).toBeUndefined()
+    expect(s.presets[0].mouthPerMove).toBeUndefined()
+    expect(s.presets[1].mouthImageUrl).toBeUndefined()
+    expect(s.presets[1].mouthPerMove).toBeUndefined()
+    expect(s.presets[2].mouthImageUrl).toBe('data:m')
+    expect(s.presets[2].mouthPerMove).toBe(3)
+    expect(s.presets[3].mouthPerMove).toBeUndefined()
+    expect('mouthIntervalMs' in s.presets[4]).toBe(false)
+  })
+
   it('不正なユーザー / プリセットを弾く', () => {
     const s = normalizeState({
       users: [{ id: '1', name: 'ok' }, { id: 2, name: 'bad-id' }, 'nope', { name: 'no-id' }],
