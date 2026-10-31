@@ -11,7 +11,7 @@ import {
   type AxisPlacement,
   type Placement,
 } from '../lib/generateCss'
-import { resolveAnchors, resolveMouthIntervalMs, type Preset } from '../lib/types'
+import { mouthIntervalForPreset, resolveAnchors, type Preset } from '../lib/types'
 
 interface Props {
   /** プレビューに映すプリセット（見た目の source）。null なら空ビューポート。 */
@@ -103,14 +103,15 @@ export default function TachiePreview({
   // 発話演出が出るのは「通話中 かつ 発話中」だけ。
   const effectiveSpeaking = inCall && speaking
   const mouthUrl = (preset?.mouthImageUrl ?? '').trim()
+  const mouthInterval = preset ? mouthIntervalForPreset(preset) : 0
   const [mouthOpen, setMouthOpen] = useState(false)
   useEffect(() => {
     if (effectiveSpeaking && mouthUrl !== '') {
-      const t = window.setInterval(() => setMouthOpen((o) => !o), resolveMouthIntervalMs(preset?.mouthIntervalMs) / 2)
+      const t = window.setInterval(() => setMouthOpen((o) => !o), mouthInterval / 2)
       return () => { window.clearInterval(t); setMouthOpen(false) }
     }
     setMouthOpen(false)
-  }, [effectiveSpeaking, mouthUrl, preset?.mouthIntervalMs])
+  }, [effectiveSpeaking, mouthUrl, mouthInterval])
   // 幅は 明示指定 > 画像の実サイズ > 仮幅 の順。
   const effWidth = width ?? naturalW ?? FALLBACK_WIDTH
   const widthPct = (effWidth / REF_W) * 100

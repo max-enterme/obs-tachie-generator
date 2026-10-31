@@ -141,7 +141,7 @@ export default function MouthImageField({ preset, maxWidth, onChange }: Props): 
 | 小見出し | `口パク（任意）` |
 | 説明 | `話している間だけ、立ち絵と『口開き』の絵を交互に切り替えます。声の大きさには連動しません。` |
 | 常に出す注意(`small`) | `立ち絵と同じ縦横比・同じ構図で用意してください（立ち絵だけを切り抜くとズレます）` |
-| 周期の欄 | ラベル `口パクの周期(ms)`、補足 `口閉じ→口開き→口閉じの1往復の長さ`、`min=50`、既定 300 |
+| 周期の欄 | **(変更 C1 で置き換え)** ~~ラベル `口パクの周期(ms)`、補足 `口閉じ→口開き→口閉じの1往復の長さ`、`min=50`、既定 300~~ |
 | 縦横比の警告 | `mouthAspectNote` の文言(上)。危険色の `<p className="hint" style={{ color: 'var(--danger)' }} role="alert">` |
 | 立ち絵が未設定のとき | 欄は全部無効、注意色の `<p>` に `先に上の「立ち絵画像」を設定してください` |
 | 口開き絵が未設定のとき | 周期の欄は無効、補足 `口開き絵を設定すると使えます` |
@@ -259,8 +259,67 @@ e2e の画素判定は既存 `measureRedBoundingBox`(`e2e/render.spec.ts:30-71`)
 | B2 | T2 | `src/lib/generateCss.ts`, `src/lib/generateCss.test.ts` | `npm run typecheck && npm run lint && npx vitest run src/lib` |
 | B3 | T3 | `src/ui/MouthImageField.tsx`(新規), `src/ui/PresetPanel.tsx`, `src/ui/TachiePreview.tsx`, `src/ui/TachiePreview.test.tsx`(新規), `src/ui/OutputPanel.tsx`, `src/App.test.tsx`, `src/App.mouth.test.tsx`(新規) | `npm run typecheck && npm run lint && npx vitest run` |
 | B4 | T4 | `e2e/render.spec.ts` | `npx playwright install chromium && npx playwright test` |
+| B5 | T6 | `src/lib/types.ts`, `src/lib/state.ts`, `src/ui/MouthImageField.tsx`, `src/ui/TachiePreview.tsx`, `src/lib/types.test.ts`, `src/lib/state.test.ts`, `src/lib/generateCss.test.ts`(追記のみ), `src/ui/TachiePreview.test.tsx`, `src/App.test.tsx`, `src/App.mouth.test.tsx` | frontmatter の `test`(feature 全体) |
 
 人手の T5 はブロックに入れない(OBS 実機)。
+
+## 変更 C1 — 口パクの周期を「動きの速さ・周期」に合わせる(2026-10-31、実装後に本人の依頼で追加)
+
+**この節が、上の「周期」に関する記述(`Preset.mouthIntervalMs`・周期の欄・M2/M4/M5/M6/M17/M18b/M19/M20 の周期部分)より優先する。** `GenerateOptions.mouthIntervalMs`・`resolveMouthIntervalMs`・`generateCss`・`e2e` は**変えない**(出力側は「渡された周期で切り替える」のまま)。
+
+### 考え方
+- ぴょこぴょこ・枠/後光・点滅は全部 `speak.durationMs`(画面の「動きの速さ・周期」、既定 750ms)で `alternate` 往復する。口パクは同じ発話中ルールで同時に始まるので、**口パクの周期 = `speak.durationMs` ÷ 整数**にすれば永久にずれない。
+- 利用者が選ぶのは ms ではなく**回数**(動き 1 回あたりの口パク回数、1〜4、既定 2 = 750ms なら 375ms)。
+- 計算結果は丸めない(750 ÷ 4 = 187.5ms をそのまま CSS に出す。丸めるとずれが溜まる)。50ms 未満だけは `resolveMouthIntervalMs` が 50ms に上げる(そのときだけ揃わない。`durationMs` が 200ms 未満でしか起きない)。
+- データ: この feature は main 未リリースなので、`Preset.mouthIntervalMs` は互換なしで**取り除く**(保存済みの値は `normalizePreset` で無視される)。
+
+### 新規インターフェース(`src/lib/types.ts`。`resolveMouthIntervalMs` の直後)
+```ts
+/** 口パクの回数(「動きの速さ・周期」1 回あたり)の既定。 */
+export const DEFAULT_MOUTH_PER_MOVE = 2
+/** 選べる回数。 */
+export const MOUTH_PER_MOVE_CHOICES = [1, 2, 3, 4] as const
+/** 1〜4 の整数ならそのまま、それ以外(未指定・非数・小数・範囲外)は 2。 */
+export function resolveMouthPerMove(v?: number): number
+/** 口パクの周期(ms) = resolveMouthIntervalMs(speak.durationMs / resolveMouthPerMove(mouthPerMove))。 */
+export function mouthIntervalForPreset(p: Pick<Preset, 'speak' | 'mouthPerMove'>): number
+// Preset: mouthIntervalMs?: number を削除し、mouthPerMove?: number を足す
+```
+
+### 変更点
+| 対象 | 変更 |
+|---|---|
+| `src/lib/types.ts` `interface Preset` | `mouthIntervalMs?` を削除、`mouthPerMove?: number`(口パクの回数。未指定は 2)を足す |
+| `src/lib/types.ts` `presetToOptions` | `mouthIntervalMs: mouthIntervalForPreset(p)`(常に入れる。口開き絵が無いと generateCss は使わないので出力は変わらない) |
+| `src/lib/types.ts` `resetPresetOptions` | 形は今のまま(`mouthPerMove` は持ち越さず既定へ戻る) |
+| `src/lib/state.ts` `normalizePreset` | `mouthIntervalMs` の検証を削除し、`mouthPerMove`: 1〜4 の整数のときだけ残す(他は `undefined`) |
+| `src/ui/MouthImageField.tsx` | 周期の欄を下の「確定値 C1」の選択欄に置き換える。「口開き絵を外す」は `mouthImageUrl` と `mouthPerMove` を `undefined` に |
+| `src/ui/TachiePreview.tsx` | 入れ替え間隔を `mouthIntervalForPreset(preset) / 2` に。`useEffect` の依存はその間隔の値 |
+
+### 確定値 C1(画面)
+| 項目 | 値 |
+|---|---|
+| 欄 | `<select id="pr-mouth-per-move">`、ラベル `口パクの回数（動き1回あたり）`、選択肢 `1回` `2回` `3回` `4回`(value 1〜4)、既定 `2回` |
+| 補足(常に・ラベルの外の `small`) | `「動きの速さ・周期」に合わせて開閉します（いまは {N}ms で 口閉じ→口開き→口閉じ）`。{N} は `mouthIntervalForPreset(preset)` を**表示だけ**小数第 1 位に丸めたもの(187.5 はそのまま、1000÷3 は 333.3。CSS 側は丸めない) |
+| 口開き絵が未設定のとき | 欄は無効、補足 `口開き絵を設定すると使えます`(従来どおり併記) |
+| 立ち絵が未設定のとき | 欄は無効(従来どおり) |
+
+### テストケース C1(置き換え・追加。既存の該当行はこの表で置き換える)
+| テスト名 | 置き場 | 入力・前提 | 期待値 |
+|---|---|---|---|
+| `describe('resolveMouthPerMove')` › `C1-1 1〜4 の整数だけ通す` | `src/lib/types.test.ts` | `undefined` / `0` / `5` / `1.5` / `NaN` / `1` / `4` | `2` / `2` / `2` / `2` / `2` / `1` / `4` |
+| `describe('mouthIntervalForPreset')` › `C1-2 動きの周期 ÷ 回数、下限は 50` | `src/lib/types.test.ts` | `speak.durationMs` 750 と回数未指定 / 600 と 3 / 750 と 4 / 100 と 4 | `375` / `200` / `187.5` / `50` |
+| `describe('presetToOptions')` › `M2 口パクの周期は動きに合わせる`(M2 を置き換え) | `src/lib/types.test.ts` | `presetToOptions({ ...base, speak: { ...base.speak, durationMs: 600 }, mouthPerMove: 3 })` と `presetToOptions(base)` | `.mouthIntervalMs` が `200` と `375` |
+| `M4`(置き換え) | `src/lib/types.test.ts` | `resetPresetOptions({ ...makeDefaultPreset('p1'), imageUrl: 'data:a', mouthImageUrl: 'data:b', mouthPerMove: 3 })` | `.mouthImageUrl` `'data:b'`、`.mouthPerMove` `undefined`、`.imageUrl` `'data:a'` |
+| `M5`(置き換え) | `src/lib/state.test.ts` | `normalizeState({ users: [], presets: [{ id: 'p1' }] })` | `mouthImageUrl` と `mouthPerMove` が `undefined` |
+| `M6`(置き換え) | `src/lib/state.test.ts` | `{ id: 'a', mouthImageUrl: '   ', mouthPerMove: 0 }` / `{ id: 'b', mouthImageUrl: 5, mouthPerMove: 'x' }` / `{ id: 'c', mouthImageUrl: 'data:m', mouthPerMove: 3 }` / `{ id: 'd', mouthPerMove: 1.5 }` / `{ id: 'e', mouthIntervalMs: 120 }` | a・b・d・e の `mouthPerMove` は `undefined`、e に `mouthIntervalMs` プロパティが無い。c は `'data:m'` と `3` |
+| `describe('口パク')` › `C1-3 動きの速さに合わせた周期が出力に入る` | `src/lib/generateCss.test.ts`(追記) | `generateCss([MOUTH_USER], presetToOptions({ ...makeDefaultPreset('p'), imageUrl: MOUTH_USER.imageUrl, mouthImageUrl: MOUTH_USER.mouthImageUrl, speak: { ...DEFAULT_SPEAK, durationMs: 600 } }, 600, 900))` | `600ms infinite alternate ease-in-out speak-jump` と `300ms infinite steps(1, end) speak-mouth` を含む |
+| `M17` / `M18c`(前提だけ置き換え) | `src/ui/TachiePreview.test.tsx` | `mouthIntervalMs: 300` → `speak: { ...DEFAULT_SPEAK, durationMs: 600 }, mouthPerMove: 2`(周期 300 → 150ms ごと) | 既存の期待値のまま |
+| `M18b`(置き換え) | `src/ui/TachiePreview.test.tsx` | `speak.durationMs: 100, mouthPerMove: 4`(25 → 下限 50 → 25ms ごと) | 24ms で `data:A`、25ms で `data:B` |
+| `C1-4 動きの速さを変えるとプレビューも追従` | `src/ui/TachiePreview.test.tsx` | M17 の前提で発話中に `rerender` して `durationMs: 1200`(周期 600 → 300ms ごと) | 再描画後 299ms で切り替わらず、300ms で切り替わる |
+| `M19` / `M20`(引き方だけ置き換え) | `src/App.test.tsx` | `/口パクの周期/` → `/口パクの回数/` | 既存の期待値のまま(有効・無効) |
+| 文言のテスト(置き換え) | `src/App.mouth.test.tsx` | 立ち絵ありで口パク欄を開く | `口閉じ→口開き→口閉じの1往復の長さ` の代わりに `/「動きの速さ・周期」に合わせて開閉します（いまは 375ms で/` が出る |
+| `C1-5 回数を変えると補足の ms が変わる` | `src/App.mouth.test.tsx` | 口開き絵を設定 → `口パクの回数（動き1回あたり）` を `3` に | 補足が `いまは 250ms` を含む |
 
 ## 依存 / 前提
 - B2 と B3 は B1 の後(型と `resolveMouthIntervalMs` を使う)。B2 と B3 は互いに独立。B4 は B2 の後。

@@ -33,10 +33,10 @@ describe('App', () => {
     fireEvent.change(screen.getByLabelText('口開き絵のURL'), { target: { value: 'data:image/png;base64,BBBB' } })
     fireEvent.click(screen.getByRole('button', { name: '口開き絵のURLを反映' }))
     expect(await screen.findByText(/口開き絵を設定しました/)).toBeInTheDocument()
-    expect(screen.getByLabelText(/口パクの周期/)).toBeEnabled()
+    expect(screen.getByLabelText(/口パクの回数/)).toBeEnabled()
     expect(screen.getByRole('button', { name: '口開き絵を外す' })).toBeEnabled()
     fireEvent.click(screen.getByRole('button', { name: '口開き絵を外す' }))
-    expect(screen.getByLabelText(/口パクの周期/)).toBeDisabled()
+    expect(screen.getByLabelText(/口パクの回数/)).toBeDisabled()
     expect(screen.queryByRole('button', { name: '口開き絵を外す' })).not.toBeInTheDocument()
   })
 
@@ -47,7 +47,7 @@ describe('App', () => {
     expect(screen.getByText(/先に上の「立ち絵画像」を設定してください/)).toBeInTheDocument()
     expect(screen.getByLabelText('口開き絵のURL')).toBeDisabled()
     expect(screen.getByRole('button', { name: '口開き絵のURLを反映' })).toBeDisabled()
-    expect(screen.getByLabelText(/口パクの周期/)).toBeDisabled()
+    expect(screen.getByLabelText(/口パクの回数/)).toBeDisabled()
   })
 
   it('M21 実サイズが測れないときだけ出力パネルに注意', async () => {
