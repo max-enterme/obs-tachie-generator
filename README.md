@@ -5,6 +5,8 @@ OBS で Discord の通話相手を「立ち絵」で表示するための **Disc
 
 **▶ https://max-enterme.github.io/obs-tachie-generator/** （インストール不要・ブラウザだけで使えます）
 
+使う人向けの説明は **[使い方ガイド](https://max-enterme.github.io/obs-tachie-generator/guide.html)**（[`public/guide.html`](public/guide.html)）。
+
 ## 特徴（既存ツールとの差分）
 
 - **画像を data URI で埋め込み** — 外部ホスト不要・Streamkit の CSP 回避・URL 失効なし。

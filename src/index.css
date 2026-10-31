@@ -51,6 +51,10 @@ body {
   margin: 0 0 4px;
 }
 
+.app header .guide-link {
+  color: #00a8fc;
+}
+
 .app header p {
   margin: 0 0 4px;
   color: var(--muted);
