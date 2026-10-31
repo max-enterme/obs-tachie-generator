@@ -59,6 +59,140 @@ export function normalizeCropRect(rect: CropRect, dims: Dimensions): CropRect | 
   return { x: left, y: top, width: right - left, height: bottom - top }
 }
 
+/** 画面上の矩形（`getBoundingClientRect()` の必要分）。 */
+export interface ScreenBox {
+  left: number
+  top: number
+  width: number
+  height: number
+}
+
+/**
+ * ドラッグ中の画面座標 → 画像のピクセル座標。**画像の外は辺にクランプし、辺の近くは辺に吸い付ける。**
+ *
+ * 編集画面の画像は縮小表示（600×900 を高さ 260px で出すと 1 画面px ≒ 3.5 画像px）なので、
+ * 吸着なしだと「端ぴったり」は 1 画面px 未満の的になり、まず当たらない。
+ * 外側へのクランプは、画像の外（ステージの余白）から押し始めても端から選べるようにするため。
+ *
+ * @param snapPx 辺からこの距離（**画面px**）以内なら辺に寄せる。0 で吸着なし。
+ */
+export function screenToImagePoint(
+  clientX: number,
+  clientY: number,
+  box: ScreenBox,
+  dims: Dimensions,
+  snapPx = 0,
+): { x: number; y: number } | null {
+  if (!(box.width >= 1) || !(box.height >= 1)) return null
+  const axis = (client: number, start: number, size: number, imgSize: number): number => {
+    const d = Math.min(Math.max(client - start, 0), size)
+    if (d <= snapPx) return 0
+    if (size - d <= snapPx) return imgSize
+    return (d / size) * imgSize
+  }
+  return {
+    x: axis(clientX, box.left, box.width, dims.width),
+    y: axis(clientY, box.top, box.height, dims.height),
+  }
+}
+
+/** 切り抜き枠のハンドル（方角。`nw` = 左上の角、`n` = 上辺）。 */
+export type CropHandle = 'n' | 's' | 'e' | 'w' | 'nw' | 'ne' | 'sw' | 'se'
+
+/** 押した所で決まるドラッグの種類。ハンドル = その辺・角だけ動かす / `move` = 枠ごと移動 / `draw` = 描き直し。 */
+export type CropGrab = CropHandle | 'move' | 'draw'
+
+/**
+ * 押した位置（画面座標）から、切り抜き枠のどこを掴んだかを決める。
+ *
+ * - 枠の辺から `hitPx`（**画面px**）以内はハンドル。辺が2本とも近ければ角
+ * - それ以外で枠の内側なら `move`。ただし**枠が画像全体なら `draw`**
+ *   （動かす余地がないうえ、開いた直後は枠＝画像全体なので、内側で描き直せないと範囲を選べない）
+ * - 枠の外・枠が無いときは `draw`
+ *
+ * 小さい枠で内側が全部ハンドルに食われないよう、内側へのハンドル幅は枠の 1/4 までに抑える。
+ *
+ * @param rect {@link normalizeCropRect} を通した矩形（`null` なら枠なし）
+ */
+export function hitTestCrop(
+  clientX: number,
+  clientY: number,
+  rect: CropRect | null,
+  box: ScreenBox,
+  dims: Dimensions,
+  hitPx: number,
+): CropGrab {
+  if (!rect || !(box.width >= 1) || !(box.height >= 1)) return 'draw'
+  const sx = box.width / dims.width
+  const sy = box.height / dims.height
+  const left = box.left + rect.x * sx
+  const right = box.left + (rect.x + rect.width) * sx
+  const top = box.top + rect.y * sy
+  const bottom = box.top + (rect.y + rect.height) * sy
+  const inX = Math.min(hitPx, (right - left) / 4)
+  const inY = Math.min(hitPx, (bottom - top) / 4)
+
+  // 縦の辺（左右）・横の辺（上下）のどちらに近いか。両方近い小さな枠では近いほうを取る。
+  const near = (p: number, lo: number, hi: number, inner: number): 'lo' | 'hi' | null => {
+    const dLo = p < lo ? lo - p : p - lo
+    const dHi = p > hi ? p - hi : hi - p
+    const hitLo = p < lo ? dLo <= hitPx : dLo <= inner
+    const hitHi = p > hi ? dHi <= hitPx : dHi <= inner
+    if (hitLo && hitHi) return dLo <= dHi ? 'lo' : 'hi'
+    return hitLo ? 'lo' : hitHi ? 'hi' : null
+  }
+  // 辺の延長線上の遠い所で掴めないよう、もう一方の軸が枠（＋hitPx）の範囲にあることを条件にする。
+  const withinX = clientX >= left - hitPx && clientX <= right + hitPx
+  const withinY = clientY >= top - hitPx && clientY <= bottom + hitPx
+  if (withinX && withinY) {
+    const h = near(clientX, left, right, inX)
+    const v = near(clientY, top, bottom, inY)
+    const ns = v === 'lo' ? 'n' : v === 'hi' ? 's' : ''
+    const ew = h === 'lo' ? 'w' : h === 'hi' ? 'e' : ''
+    if (ns || ew) return (ns + ew) as CropHandle
+  }
+
+  const inside = clientX > left && clientX < right && clientY > top && clientY < bottom
+  if (inside && !isFullRect(rect, dims)) return 'move'
+  return 'draw'
+}
+
+/**
+ * ハンドル操作・移動のドラッグ中の矩形。`start` は押した時点の矩形（正規化済み）。
+ *
+ * - **ハンドル**: 掴んだ辺を `to` の位置へ（`to` は {@link screenToImagePoint} で吸着・クランプ済みを渡す）。
+ *   反対の辺を越えないよう、最低 1px を残して止める（越えて裏返ると枠が一瞬消えて分かりにくい）
+ * - **移動**: `from` → `to` の差分だけずらし、画像の外へは出さない（大きさは変えない）
+ *
+ * 小数のまま返す。整数に寄せるのはドラッグ終了時の {@link normalizeCropRect}。
+ */
+export function dragCropRect(
+  grab: CropHandle | 'move',
+  start: CropRect,
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  dims: Dimensions,
+): CropRect {
+  const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi)
+  if (grab === 'move') {
+    return {
+      x: clamp(start.x + to.x - from.x, 0, dims.width - start.width),
+      y: clamp(start.y + to.y - from.y, 0, dims.height - start.height),
+      width: start.width,
+      height: start.height,
+    }
+  }
+  let left = start.x
+  let right = start.x + start.width
+  let top = start.y
+  let bottom = start.y + start.height
+  if (grab.includes('w')) left = clamp(to.x, 0, right - 1)
+  if (grab.includes('e')) right = clamp(to.x, left + 1, dims.width)
+  if (grab.includes('n')) top = clamp(to.y, 0, bottom - 1)
+  if (grab.includes('s')) bottom = clamp(to.y, top + 1, dims.height)
+  return { x: left, y: top, width: right - left, height: bottom - top }
+}
+
 /** {@link normalizeCropRect} を通した矩形が、画像全体と同じか（＝切り抜く意味がないか）。 */
 export function isFullRect(rect: CropRect, dims: Dimensions): boolean {
   return (

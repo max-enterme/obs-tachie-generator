@@ -638,17 +638,29 @@ button:disabled {
   margin-bottom: 10px;
 }
 
-/* 画像をフィット表示して、その上に切り抜き枠を重ねる（枠は画像に対する % で置く）。 */
+/*
+ * ドラッグを受ける面。画像の周りに余白を取り、画像の外から押し始めても端から選べるようにする
+ * （座標は画像の辺にクランプされる）。
+ */
 .crop-stage {
-  position: relative;
   display: inline-block;
+  box-sizing: border-box;
   max-width: 100%;
+  padding: 14px;
   margin-bottom: 10px;
-  border: 1px solid var(--line);
+  border: 1px dashed var(--line);
   border-radius: 6px;
-  overflow: hidden;
   cursor: crosshair;
   touch-action: none; /* ドラッグ中にスクロールへ取られない */
+  /* 余白で押すと文字選択が始まり、次のドラッグが選択範囲のドラッグ＆ドロップに化けて途切れる */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* 画像をフィット表示して、その上に切り抜き枠を重ねる（枠は画像に対する % で置く）。 */
+.crop-frame {
+  position: relative;
+  overflow: hidden;
   /* 透過を示す市松模様（余白の有無が見えないと「詰める」の意味が分からない） */
   background-color: #2a2f3a;
   background-image: linear-gradient(45deg, #3a4150 25%, transparent 25%),
@@ -676,6 +688,29 @@ button:disabled {
   pointer-events: none;
   box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
 }
+
+/*
+ * 枠の辺・角のハンドル（見た目だけ。掴める範囲は hitTestCrop が決める）。
+ * 画像の端にある辺のハンドルは .crop-frame の overflow で半分隠れるが、位置は分かる。
+ */
+.crop-handle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  box-sizing: border-box;
+  background: #fff;
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+}
+.crop-handle[data-handle='nw'] { left: 0; top: 0; }
+.crop-handle[data-handle='n'] { left: 50%; top: 0; }
+.crop-handle[data-handle='ne'] { left: 100%; top: 0; }
+.crop-handle[data-handle='e'] { left: 100%; top: 50%; }
+.crop-handle[data-handle='se'] { left: 100%; top: 100%; }
+.crop-handle[data-handle='s'] { left: 50%; top: 100%; }
+.crop-handle[data-handle='sw'] { left: 0; top: 100%; }
+.crop-handle[data-handle='w'] { left: 0; top: 50%; }
 
 /* 破壊的な操作なので、確認は目立つ枠で出す（見落として押し切られないように）。 */
 .crop-confirm {

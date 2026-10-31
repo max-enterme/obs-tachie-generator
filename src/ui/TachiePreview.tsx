@@ -87,12 +87,11 @@ export default function TachiePreview({
 }: Props) {
   const [inCall, setInCall] = useState(true)
   const [speaking, setSpeaking] = useState(false)
-  const [naturalW, setNaturalW] = useState<number | null>(null)
-
-  // 画像が変わったら実測幅をリセット（onLoad で入れ直す）。
-  useEffect(() => {
-    setNaturalW(null)
-  }, [preset?.imageUrl])
+  // 実測幅は「どの画像を測った値か」と組で持ち、今の画像と同じときだけ使う。
+  // 画像の変更時に effect で消す方式だと、重い画面では onLoad が effect より先に来て
+  // 測った値を後から消してしまい、仮幅のまま戻らなかった（再読み込みまで直らない）。
+  const [measured, setMeasured] = useState<{ url: string; width: number } | null>(null)
+  const naturalW = measured && measured.url === preset?.imageUrl ? measured.width : null
 
   const left = preset?.left ?? 0
   const bottom = preset?.bottom ?? 0
@@ -277,7 +276,13 @@ export default function TachiePreview({
               style={figStyle}
               src={mouthOpen && mouthUrl !== '' ? preset.mouthImageUrl : preset.imageUrl}
               alt={preset.name || 'プリセット'}
-              onLoad={(e) => { if (e.currentTarget.getAttribute('src') === preset.imageUrl) setNaturalW(e.currentTarget.naturalWidth || null) }}
+              onLoad={(e) => {
+                const url = e.currentTarget.getAttribute('src') ?? ''
+                // 口開き絵の読み込みでは実幅を記録しない（箱の大きさは立ち絵が基準）。
+                if (url !== preset.imageUrl) return
+                const w = e.currentTarget.naturalWidth
+                setMeasured(w ? { url, width: w } : null)
+              }}
             />
           ) : (
             <div className="tp-placeholder" style={figStyle} aria-label="画像未設定">
