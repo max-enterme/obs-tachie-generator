@@ -557,6 +557,48 @@ export function tachieBoxSize(
   return { width: w, height: h }
 }
 
+function tachieAfterDecls(
+  id: string,
+  options: GenerateOptions,
+  pos: PositionParts,
+  staticTransform: string,
+  box: { width: number; height: number } | null,
+  display: string,
+): string[] {
+  const { width, dimWhenQuiet } = options
+  return box
+    ? [
+        `  content: "";`, `  position: fixed;`, ...pos.decls.map((d) => `  ${d}`),
+        `  display: ${display};`, ...(staticTransform ? [`  transform: ${staticTransform};`] : []),
+        `  width: ${box.width}px;`, `  height: ${box.height}px;`,
+        `  background-image: var(--img-stand-url-${id});`, `  background-size: contain;`,
+        `  background-repeat: no-repeat;`, `  background-position: center;`,
+        ...(dimWhenQuiet ? [`  filter: brightness(${DIM_BRIGHTNESS_PCT}%);`] : []),
+      ]
+    : [
+        `  content: var(--img-stand-url-${id});`, `  position: fixed;`, ...pos.decls.map((d) => `  ${d}`),
+        `  display: ${display};`, ...(staticTransform ? [`  transform: ${staticTransform};`] : []),
+        ...(width != null ? [`  width: ${width}px;`] : []),
+        ...(dimWhenQuiet ? [`  filter: brightness(${DIM_BRIGHTNESS_PCT}%);`] : []),
+      ]
+}
+
+function speakingDecls(
+  options: GenerateOptions,
+  effects: Effect[],
+  mouthOn: boolean,
+  suffix = '',
+): string[] {
+  const decls: string[] = []
+  if (options.dimWhenQuiet && !effects.includes('light')) decls.push(`  filter: brightness(100%);`)
+  const animations = [
+    ...(effects.length > 0 ? [animationValue(effects, options.speak.durationMs, suffix)] : []),
+    ...(mouthOn ? [`${resolveMouthIntervalMs(options.mouthIntervalMs)}ms infinite steps(1, end) speak-mouth${suffix}`] : []),
+  ]
+  if (animations.length > 0) decls.push(`  animation: ${animations.join(',')};`)
+  return decls
+}
+
 export interface SeatCandidate {
   user: TachieUser
   options: GenerateOptions
@@ -590,56 +632,36 @@ export function generateSeatCss(seatName: string, candidates: SeatCandidate[]): 
     `body, #root {\n  overflow: hidden !important;\n}`,
   ]
 
+  const keyframes: string[] = []
   candidates.forEach(({ user, options }, index) => {
     const id = safeId(user.id)
     const suffix = `-c${index + 1}`
     const active = seatActiveSelector(candidates.map((candidate) => candidate.user.id), index)
     const o = { ...options, hideWhenAway: false }
-    const { left, bottom, width, dimWhenQuiet, speak, imageNaturalWidth, imageNaturalHeight } = o
-    const pos = placementDecls(placeTachie(resolveAnchors(o), left, bottom))
+    const { speak, dimWhenQuiet } = o
+    const pos = placementDecls(placeTachie(resolveAnchors(o), o.left, o.bottom))
     const staticTransform = composeTransform(...pos.transforms)
-    const box = tachieBoxSize(width, imageNaturalWidth, imageNaturalHeight)
+    const box = tachieBoxSize(o.width, o.imageNaturalWidth, o.imageNaturalHeight)
     const effects = activeEffects(speak)
-    const afterDecls = box
-      ? [
-          '  content: "";', '  position: fixed;', ...pos.decls.map((decl) => `  ${decl}`),
-          '  display: block;', ...(staticTransform ? [`  transform: ${staticTransform};`] : []),
-          `  width: ${box.width}px;`, `  height: ${box.height}px;`,
-          `  background-image: var(--img-stand-url-${id});`, '  background-size: contain;',
-          '  background-repeat: no-repeat;', '  background-position: center;',
-          ...(dimWhenQuiet ? [`  filter: brightness(${DIM_BRIGHTNESS_PCT}%);`] : []),
-        ]
-      : [
-          `  content: var(--img-stand-url-${id});`, '  position: fixed;',
-          ...pos.decls.map((decl) => `  ${decl}`), '  display: block;',
-          ...(staticTransform ? [`  transform: ${staticTransform};`] : []),
-          ...(width != null ? [`  width: ${width}px;`] : []),
-          ...(dimWhenQuiet ? [`  filter: brightness(${DIM_BRIGHTNESS_PCT}%);`] : []),
-        ]
+    const afterDecls = tachieAfterDecls(id, o, pos, staticTransform, box, 'block')
     const userLabel = user.name ? `${cssComment(user.name)} ` : ''
     parts.push(`/* 候補${index + 1}: ${userLabel}(${id}) */\n${active}::after {\n${afterDecls.join('\n')}\n}`)
     const nameCss = nameBlock(user, o, `${active}::before`)
     if (nameCss) parts.push(nameCss)
 
     if (effects.length > 0 || dimWhenQuiet || mouthOn[index]) {
-      const speakingDecls: string[] = []
-      if (dimWhenQuiet && !effects.includes('light')) speakingDecls.push('  filter: brightness(100%);')
-      const animations = [
-        ...(effects.length ? [animationValue(effects, speak.durationMs, suffix)] : []),
-        ...(mouthOn[index] ? [`${resolveMouthIntervalMs(o.mouthIntervalMs)}ms infinite steps(1, end) speak-mouth${suffix}`] : []),
-      ]
-      if (animations.length) speakingDecls.push(`  animation: ${animations.join(',')};`)
       const speakingSelector = `${active}:has(img[src*="avatars/${id}"][class*="Voice_avatarSpeaking__"])::after`
-      parts.push(`${speakingSelector} {\n${speakingDecls.join('\n')}\n}`)
+      parts.push(`${speakingSelector} {\n${speakingDecls(o, effects, mouthOn[index], suffix).join('\n')}\n}`)
     }
 
-    parts.push(...keyframeBlocks(effects, speak, 'transform', pos.transforms, suffix))
-    if (mouthOn[index]) parts.push(KEYFRAMES_MOUTH(id, suffix))
+    keyframes.push(...keyframeBlocks(effects, speak, 'transform', pos.transforms, suffix))
+    if (mouthOn[index]) keyframes.push(KEYFRAMES_MOUTH(id, suffix))
   })
   parts.push(
     `img {\n  display: none !important;\n}`,
     `/* Streamkit のアカウント名は隠す（名前は上のブロックで出す） */\n[class*="Voice_name__"], [class*="Voice_user__"] {\n  display: none !important;\n}`,
   )
+  parts.push(...keyframes)
   return parts.join('\n\n') + '\n'
 }
 
@@ -661,32 +683,7 @@ export function generateStandaloneCss(user: TachieUser, options: GenerateOptions
   const box = tachieBoxSize(width, imageNaturalWidth, imageNaturalHeight)
   const mouthOn = box != null && (user.mouthImageUrl ?? '').trim() !== ''
 
-  const afterDecls = box
-    ? [
-        `  content: "";`,
-        `  position: fixed;`,
-        ...pos.decls.map((d) => `  ${d}`),
-        `  display: ${hideWhenAway ? 'none' : 'block'};`,
-        ...(staticTransform ? [`  transform: ${staticTransform};`] : []),
-        `  width: ${box.width}px;`,
-        `  height: ${box.height}px;`,
-        `  background-image: var(--img-stand-url-${id});`,
-        `  background-size: contain;`,
-        `  background-repeat: no-repeat;`,
-        `  background-position: center;`,
-        ...(dimWhenQuiet ? [`  filter: brightness(${DIM_BRIGHTNESS_PCT}%);`] : []),
-      ]
-    : [
-        `  content: var(--img-stand-url-${id});`,
-        `  position: fixed;`,
-        ...pos.decls.map((d) => `  ${d}`),
-        // 通話にいないときは隠す設定なら、既定は非表示（在室時だけ下のルールで出す）。
-        `  display: ${hideWhenAway ? 'none' : 'block'};`,
-        ...(staticTransform ? [`  transform: ${staticTransform};`] : []),
-        ...(width != null ? [`  width: ${width}px;`] : []),
-        // 静かな人を暗くする：非発話時の既定を暗く
-        ...(dimWhenQuiet ? [`  filter: brightness(${DIM_BRIGHTNESS_PCT}%);`] : []),
-      ]
+  const afterDecls = tachieAfterDecls(id, options, pos, staticTransform, box, hideWhenAway ? 'none' : 'block')
 
   const afterHeader = box
     ? `/* 立ち絵（常時表示：通話に居ても居なくても同じ位置）
@@ -707,22 +704,11 @@ export function generateStandaloneCss(user: TachieUser, options: GenerateOptions
 
   // 発話中のルール：演出があるか、暗転解除（dim）が要るなら出す
   if (effects.length > 0 || dimWhenQuiet || mouthOn) {
-    const speakingDecls: string[] = []
-    // outline アニメが filter を持つ場合はそれで明るさが戻る。それ以外は明示的に戻す。
-    if (dimWhenQuiet && !effects.includes('light')) {
-      speakingDecls.push(`  filter: brightness(100%);`)
-    }
-    const animations = [
-      ...(effects.length > 0 ? [animationValue(effects, speak.durationMs)] : []),
-      ...(mouthOn ? [`${resolveMouthIntervalMs(options.mouthIntervalMs)}ms infinite steps(1, end) speak-mouth`] : []),
-    ]
-    if (animations.length > 0) {
-      speakingDecls.push(`  animation: ${animations.join(',')};`)
-    }
+    const decls = speakingDecls(options, effects, mouthOn)
     parts.push(
       `/* 発話中：非表示の実 img に付く Voice_avatarSpeaking__ を :has() で検知して body::after を演出 */
 body:has(img[src*="avatars/${id}"][class*="Voice_avatarSpeaking__"])::after {
-${speakingDecls.join('\n')}
+${decls.join('\n')}
 }`,
     )
   }
