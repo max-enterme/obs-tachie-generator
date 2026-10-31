@@ -4,6 +4,7 @@ import {
   dataUriBytes,
   isFullRect,
   normalizeCropRect,
+  screenToImagePoint,
   type CropRect,
 } from './crop'
 
@@ -98,6 +99,46 @@ describe('normalizeCropRect', () => {
   it('NaN / Infinity は拒否する（入力欄を空にすると NaN が来る）', () => {
     expect(normalizeCropRect({ x: NaN, y: 0, width: 10, height: 10 }, dims)).toBeNull()
     expect(normalizeCropRect({ x: 0, y: 0, width: Infinity, height: 10 }, dims)).toBeNull()
+  })
+})
+
+describe('screenToImagePoint', () => {
+  // 600×900 の画像を 200×300 で表示（1 画面px = 3 画像px）。
+  const dims = { width: 600, height: 900 }
+  const box = { left: 100, top: 50, width: 200, height: 300 }
+
+  it('画像の内側は表示倍率で換算する', () => {
+    expect(screenToImagePoint(200, 200, box, dims, 6)).toEqual({ x: 300, y: 450 })
+  })
+
+  it('画像の外は最寄りの辺にクランプする（四隅の外から押し始められる）', () => {
+    expect(screenToImagePoint(80, 30, box, dims, 6)).toEqual({ x: 0, y: 0 })
+    expect(screenToImagePoint(320, 30, box, dims, 6)).toEqual({ x: 600, y: 0 })
+    expect(screenToImagePoint(80, 370, box, dims, 6)).toEqual({ x: 0, y: 900 })
+    expect(screenToImagePoint(320, 370, box, dims, 6)).toEqual({ x: 600, y: 900 })
+  })
+
+  it('辺から snapPx 以内の内側は辺に吸い付く', () => {
+    // 左上から 5px 内側 → 吸着で 0
+    expect(screenToImagePoint(105, 55, box, dims, 6)).toEqual({ x: 0, y: 0 })
+    // 右下から 5px 内側 → 吸着で画像の幅・高さ
+    expect(screenToImagePoint(295, 345, box, dims, 6)).toEqual({ x: 600, y: 900 })
+  })
+
+  it('snapPx を超えれば吸着しない', () => {
+    const p = screenToImagePoint(107, 57, box, dims, 6)
+    expect(p?.x).toBeCloseTo(21)
+    expect(p?.y).toBeCloseTo(21)
+  })
+
+  it('snapPx = 0 なら吸着せずそのまま換算', () => {
+    const p = screenToImagePoint(101, 349, box, dims, 0)
+    expect(p?.x).toBeCloseTo(3)
+    expect(p?.y).toBeCloseTo(897)
+  })
+
+  it('表示サイズが潰れていたら null', () => {
+    expect(screenToImagePoint(0, 0, { left: 0, top: 0, width: 0, height: 10 }, dims, 6)).toBeNull()
   })
 })
 

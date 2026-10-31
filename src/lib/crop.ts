@@ -59,6 +59,43 @@ export function normalizeCropRect(rect: CropRect, dims: Dimensions): CropRect | 
   return { x: left, y: top, width: right - left, height: bottom - top }
 }
 
+/** 画面上の矩形（`getBoundingClientRect()` の必要分）。 */
+export interface ScreenBox {
+  left: number
+  top: number
+  width: number
+  height: number
+}
+
+/**
+ * ドラッグ中の画面座標 → 画像のピクセル座標。**画像の外は辺にクランプし、辺の近くは辺に吸い付ける。**
+ *
+ * 編集画面の画像は縮小表示（600×900 を高さ 260px で出すと 1 画面px ≒ 3.5 画像px）なので、
+ * 吸着なしだと「端ぴったり」は 1 画面px 未満の的になり、まず当たらない。
+ * 外側へのクランプは、画像の外（ステージの余白）から押し始めても端から選べるようにするため。
+ *
+ * @param snapPx 辺からこの距離（**画面px**）以内なら辺に寄せる。0 で吸着なし。
+ */
+export function screenToImagePoint(
+  clientX: number,
+  clientY: number,
+  box: ScreenBox,
+  dims: Dimensions,
+  snapPx = 0,
+): { x: number; y: number } | null {
+  if (!(box.width >= 1) || !(box.height >= 1)) return null
+  const axis = (client: number, start: number, size: number, imgSize: number): number => {
+    const d = Math.min(Math.max(client - start, 0), size)
+    if (d <= snapPx) return 0
+    if (size - d <= snapPx) return imgSize
+    return (d / size) * imgSize
+  }
+  return {
+    x: axis(clientX, box.left, box.width, dims.width),
+    y: axis(clientY, box.top, box.height, dims.height),
+  }
+}
+
 /** {@link normalizeCropRect} を通した矩形が、画像全体と同じか（＝切り抜く意味がないか）。 */
 export function isFullRect(rect: CropRect, dims: Dimensions): boolean {
   return (
