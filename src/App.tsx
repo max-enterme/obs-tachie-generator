@@ -120,6 +120,11 @@ export default function App() {
         <p>
           「誰（Discord ID）」と「見た目（立ち絵プリセット）」を別々に用意して、選んだ1組を出力します。
         </p>
+        <p>
+          <a className="guide-link" href={`${import.meta.env.BASE_URL}guide.html`}>
+            はじめての方へ：使い方ガイド
+          </a>
+        </p>
       </header>
 
       <Stepper steps={STEPS} current={step} onJump={goto} />

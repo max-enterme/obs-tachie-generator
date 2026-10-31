@@ -1,0 +1,594 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>使い方ガイド — OBS 立ち絵ジェネレーター</title>
+    <meta
+      name="description"
+      content="OBS に Discord の通話相手を立ち絵で出すための CSS を作るツールの使い方。用意するもの、3 ステップの手順、OBS への貼り方、うまくいかないときの対処。"
+    />
+    <style>
+      /* ツール本体（src/index.css）と同じ Discord ダーク寄せの配色 */
+      :root {
+        --bg: #1e1f22;
+        --panel: #2b2d31;
+        --panel-2: #313338;
+        --line: #3f4147;
+        --text: #dbdee1;
+        --strong: #f2f3f5;
+        --muted: #949ba4;
+        --accent: #5865f2;
+        --accent-hover: #4752c4;
+        --ok: #23a55a;
+        --warn: #f0b232;
+        --danger: #f23f43;
+        color-scheme: dark;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: system-ui, -apple-system, 'Segoe UI', 'Hiragino Kaku Gothic ProN',
+          'Noto Sans JP', sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.75;
+      }
+      a {
+        color: #00a8fc;
+      }
+      .wrap {
+        max-width: 880px;
+        margin: 0 auto;
+        padding: 0 16px 80px;
+      }
+      header.hero {
+        text-align: center;
+        padding: 48px 0 32px;
+      }
+      .hero .kicker {
+        color: var(--muted);
+        font-size: 0.85rem;
+        letter-spacing: 0.08em;
+        margin: 0 0 8px;
+      }
+      .hero h1 {
+        color: var(--strong);
+        font-size: clamp(1.6rem, 5vw, 2.2rem);
+        line-height: 1.35;
+        margin: 0 0 14px;
+      }
+      .hero p.lead {
+        max-width: 36em;
+        margin: 0 auto 24px;
+        font-size: 1.02rem;
+      }
+      .btn {
+        display: inline-block;
+        background: var(--accent);
+        color: #fff;
+        text-decoration: none;
+        font-weight: 700;
+        padding: 12px 26px;
+        border-radius: 8px;
+      }
+      .btn:hover {
+        background: var(--accent-hover);
+      }
+      .btn.ghost {
+        background: transparent;
+        border: 1px solid var(--line);
+        color: var(--text);
+        font-weight: 600;
+      }
+      .btn.ghost:hover {
+        background: var(--panel);
+      }
+      .hero .actions {
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+        flex-wrap: wrap;
+      }
+      nav.toc {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 14px;
+        justify-content: center;
+        font-size: 0.88rem;
+        padding: 12px 0 0;
+        border-top: 1px solid var(--line);
+      }
+      nav.toc a {
+        color: var(--muted);
+        text-decoration: none;
+      }
+      nav.toc a:hover {
+        color: var(--text);
+      }
+      section {
+        padding-top: 44px;
+      }
+      h2 {
+        color: var(--strong);
+        font-size: 1.35rem;
+        margin: 0 0 6px;
+      }
+      h2 + .sub {
+        color: var(--muted);
+        margin: 0 0 18px;
+        font-size: 0.92rem;
+      }
+      h3 {
+        color: var(--strong);
+        font-size: 1.05rem;
+        margin: 0 0 6px;
+      }
+      .figure {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 14px;
+        margin: 0 0 8px;
+      }
+      .figure svg {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+      .figure figcaption {
+        color: var(--muted);
+        font-size: 0.82rem;
+        margin-top: 8px;
+        text-align: center;
+      }
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 12px;
+      }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 16px 16px 14px;
+      }
+      .card p {
+        margin: 0;
+        font-size: 0.92rem;
+      }
+      .card .tag {
+        display: inline-block;
+        font-size: 0.72rem;
+        color: var(--muted);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 0 8px;
+        margin-bottom: 6px;
+      }
+      ul.need {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: grid;
+        gap: 8px;
+      }
+      ul.need li {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 10px 14px;
+      }
+      ul.need li b {
+        color: var(--strong);
+      }
+      ul.need li small {
+        display: block;
+        color: var(--muted);
+      }
+      ol.steps {
+        list-style: none;
+        counter-reset: s;
+        padding: 0;
+        margin: 0;
+        display: grid;
+        gap: 14px;
+      }
+      ol.steps > li {
+        counter-increment: s;
+        position: relative;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 16px 16px 14px 62px;
+      }
+      ol.steps > li::before {
+        content: counter(s);
+        position: absolute;
+        left: 16px;
+        top: 16px;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: var(--accent);
+        color: #fff;
+        font-weight: 700;
+        display: grid;
+        place-items: center;
+      }
+      ol.steps > li.obs::before {
+        background: var(--ok);
+      }
+      ol.steps p,
+      ol.steps ul,
+      ol.steps ol {
+        margin: 0 0 6px;
+        font-size: 0.93rem;
+      }
+      ol.steps ul,
+      ol.steps ol {
+        padding-left: 1.3em;
+      }
+      .ui {
+        background: var(--panel-2);
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 0 6px;
+        font-size: 0.88em;
+        white-space: nowrap;
+        color: var(--strong);
+      }
+      .note {
+        border-left: 3px solid var(--warn);
+        background: rgba(240, 178, 50, 0.08);
+        padding: 8px 12px;
+        border-radius: 0 6px 6px 0;
+        font-size: 0.88rem;
+        margin: 8px 0 0;
+      }
+      .note.info {
+        border-color: var(--accent);
+        background: rgba(88, 101, 242, 0.1);
+      }
+      details {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        margin-bottom: 8px;
+      }
+      details summary {
+        cursor: pointer;
+        padding: 12px 14px;
+        font-weight: 600;
+        color: var(--strong);
+        list-style: none;
+      }
+      details summary::-webkit-details-marker {
+        display: none;
+      }
+      details summary::before {
+        content: '＋';
+        display: inline-block;
+        width: 1.4em;
+        color: var(--muted);
+      }
+      details[open] summary::before {
+        content: '－';
+      }
+      details .body {
+        padding: 0 14px 12px 36px;
+        font-size: 0.92rem;
+      }
+      details .body p {
+        margin: 0 0 6px;
+      }
+      details .body ul {
+        margin: 0 0 6px;
+        padding-left: 1.2em;
+      }
+      footer {
+        margin-top: 56px;
+        padding-top: 18px;
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 0.82rem;
+      }
+      footer p {
+        margin: 0 0 6px;
+      }
+      .center {
+        text-align: center;
+      }
+      @media (max-width: 520px) {
+        ol.steps > li {
+          padding-left: 16px;
+          padding-top: 58px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="hero">
+        <p class="kicker">使い方ガイド</p>
+        <h1>OBS に、Discord の通話相手を<br />立ち絵で出す</h1>
+        <p class="lead">
+          Discord で通話している人を、アイコンではなく<b>好きな立ち絵</b>で配信画面に出すためのツールです。
+          話すと立ち絵が動き、口開きの絵を用意すれば口パクもします。
+          ブラウザだけで使えて、インストールもアカウント登録も要りません。
+        </p>
+        <div class="actions">
+          <a class="btn" href="./">ツールを開く</a>
+          <a class="btn ghost" href="#steps">使い方を見る</a>
+        </div>
+      </header>
+
+      <nav class="toc" aria-label="目次">
+        <a href="#how">しくみ</a>
+        <a href="#features">できること</a>
+        <a href="#prepare">用意するもの</a>
+        <a href="#steps">使い方</a>
+        <a href="#obs">OBS に貼る</a>
+        <a href="#faq">うまくいかないとき</a>
+      </nav>
+
+      <section id="how">
+        <h2>しくみ</h2>
+        <p class="sub">
+          OBS には Discord 公式の「Streamkit」で通話の様子を表示できます。そこに貼る「見た目の指定（CSS）」を、このツールが作ります。
+        </p>
+        <figure class="figure">
+          <svg viewBox="0 0 800 220" role="img" aria-labelledby="how-title">
+            <title id="how-title">
+              ユーザー（誰）と立ち絵プリセット（見た目）を組み合わせて CSS を作り、OBS のブラウザソースに貼る流れ
+            </title>
+            <defs>
+              <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M0,0 L10,5 L0,10 z" fill="#949ba4" />
+              </marker>
+            </defs>
+            <g font-family="system-ui, sans-serif" text-anchor="middle">
+              <rect x="10" y="20" width="190" height="72" rx="10" fill="#313338" stroke="#5865f2" stroke-width="2" />
+              <text x="105" y="50" fill="#f2f3f5" font-size="17" font-weight="700">① ユーザー</text>
+              <text x="105" y="74" fill="#949ba4" font-size="13">誰を出すか（Discord ID）</text>
+
+              <rect x="10" y="128" width="190" height="72" rx="10" fill="#313338" stroke="#5865f2" stroke-width="2" />
+              <text x="105" y="158" fill="#f2f3f5" font-size="17" font-weight="700">② 立ち絵プリセット</text>
+              <text x="105" y="182" fill="#949ba4" font-size="13">画像・位置・動き</text>
+
+              <path d="M200 56 C 250 56, 250 110, 290 110" fill="none" stroke="#949ba4" stroke-width="2" marker-end="url(#arr)" />
+              <path d="M200 164 C 250 164, 250 110, 290 110" fill="none" stroke="#949ba4" stroke-width="2" marker-end="url(#arr)" />
+
+              <rect x="296" y="74" width="190" height="72" rx="10" fill="#313338" stroke="#5865f2" stroke-width="2" />
+              <text x="391" y="104" fill="#f2f3f5" font-size="17" font-weight="700">③ 組み合わせて出力</text>
+              <text x="391" y="128" fill="#949ba4" font-size="13">1 組ぶんの CSS ができる</text>
+
+              <line x1="486" y1="110" x2="574" y2="110" stroke="#949ba4" stroke-width="2" marker-end="url(#arr)" />
+              <text x="530" y="100" fill="#949ba4" font-size="12">貼る</text>
+
+              <rect x="580" y="54" width="210" height="112" rx="10" fill="#313338" stroke="#23a55a" stroke-width="2" />
+              <text x="685" y="84" fill="#f2f3f5" font-size="17" font-weight="700">OBS</text>
+              <text x="685" y="108" fill="#949ba4" font-size="13">ブラウザソース</text>
+              <text x="685" y="128" fill="#949ba4" font-size="13">＝ Streamkit の URL</text>
+              <text x="685" y="148" fill="#949ba4" font-size="13">＋ カスタムCSS</text>
+            </g>
+          </svg>
+          <figcaption>「誰」と「見た目」は別々に作っておき、出すときに組み合わせます</figcaption>
+        </figure>
+        <p class="note info">
+          「誰」と「見た目」が分かれているので、たとえば<b>自分の ID で動きを試してから、相手の ID に差し替える</b>だけで本番用ができます。
+        </p>
+      </section>
+
+      <section id="features">
+        <h2>できること</h2>
+        <p class="sub">設定はどれも、画面下のプレビューですぐ確かめられます。</p>
+        <div class="cards">
+          <div class="card">
+            <span class="tag">表示</span>
+            <h3>通話にいなくても出しっぱなし</h3>
+            <p>相手が通話に入る前から、決めた位置に立ち絵が出ます。出入りで位置がずれません。入っている間だけ出す設定もあります。</p>
+          </div>
+          <div class="card">
+            <span class="tag">話すと反応</span>
+            <h3>話すと動く</h3>
+            <p>ぴょこぴょこ跳ねる／枠・後光が光る／点滅、から選べます（組み合わせも可）。話していない人を暗くして、話している人を目立たせることもできます。</p>
+          </div>
+          <div class="card">
+            <span class="tag">話すと反応</span>
+            <h3>口パク</h3>
+            <p>「口を開けた絵」をもう 1 枚用意すると、話している間だけ交互に切り替わります。声の大きさには連動しません。</p>
+          </div>
+          <div class="card">
+            <span class="tag">表示</span>
+            <h3>好きな名前を添える</h3>
+            <p>Discord のアカウント名ではなく、配信で見せたい呼び名を出せます。文字の大きさ・色・縁取り・テロップ帯も選べます。</p>
+          </div>
+          <div class="card">
+            <span class="tag">画像</span>
+            <h3>切り抜きもツールの中で</h3>
+            <p>画像のまわりの透明な余白をボタン 1 つで詰めたり、ドラッグで範囲を決めて切り抜いたりできます。</p>
+          </div>
+          <div class="card">
+            <span class="tag">画像</span>
+            <h3>画像のリンク切れが起きない</h3>
+            <p>画像は CSS の中に埋め込むので、画像を置いておくサーバーが要りません。Discord に貼った画像のリンク（約 24 時間で切れる）も、自動で埋め込みに変えます。</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="prepare">
+        <h2>用意するもの</h2>
+        <p class="sub">はじめる前にそろえておくと迷いません。</p>
+        <ul class="need">
+          <li>
+            <b>OBS Studio（新しめのもの）</b>
+            <small>古い OBS だと、立ち絵の常時表示や話したときの動きが効きません。OBS 33 で動作を確認しています。</small>
+          </li>
+          <li>
+            <b>Discord アカウント</b>
+            <small>Streamkit の URL を作るときにログインします。通話相手の「ユーザー ID」も Discord で調べます（手順 ① で説明）。</small>
+          </li>
+          <li>
+            <b>立ち絵の画像</b>
+            <small>背景が透明な PNG がおすすめです。1 枚 8MB まで。</small>
+          </li>
+          <li>
+            <b>口を開けた絵（口パクしたいときだけ）</b>
+            <small>立ち絵と<b>同じ大きさ・同じ構図</b>で、口だけ開けたもの。立ち絵だけ切り抜くと、口開きの絵とずれるので注意。</small>
+          </li>
+        </ul>
+      </section>
+
+      <section id="steps">
+        <h2>使い方</h2>
+        <p class="sub">ツールの画面上部にある ①〜③ のタブを順に進めます。最後に OBS に貼ります。</p>
+        <ol class="steps">
+          <li>
+            <h3>ユーザーを登録する</h3>
+            <p>立ち絵を出したい人の <span class="ui">Discord ユーザーID</span> を入れて <span class="ui">追加</span>。</p>
+            <p>ユーザー ID の調べ方:</p>
+            <ol>
+              <li>Discord の <span class="ui">ユーザー設定</span> → <span class="ui">詳細設定</span> → <span class="ui">開発者モード</span> をオン</li>
+              <li>相手のアイコンを右クリック → <span class="ui">ユーザーIDをコピー</span></li>
+            </ol>
+            <p>
+              <span class="ui">画面に出す名前</span> に入れた文字が、配信画面に名前として出ます。
+              <span class="ui">表示名</span> はツールの中で見分けるためのメモです。
+            </p>
+          </li>
+          <li>
+            <h3>立ち絵・演出（プリセット）を作る</h3>
+            <p>「見た目」のセットを作ります。上から順に:</p>
+            <ul>
+              <li><b>立ち絵画像</b> — ファイルをアップロードするか、画像の URL を貼る</li>
+              <li><b>クロップ（切り抜き）</b> — 透明な余白があるなら <span class="ui">余白を詰める</span>（余白があると位置がずれて見えます）</li>
+              <li><b>口パク（任意）</b> — 口を開けた絵を入れると口パクします</li>
+              <li><b>位置とサイズ</b> — 画面のどの角を基準にするかと、そこからの距離・幅</li>
+              <li><b>発話演出</b> — 話したときの動き</li>
+              <li><b>名前表示</b> — 名前を出すか、出す場所・文字の見た目</li>
+            </ul>
+            <p>下の <b>プレビュー</b> をクリックすると「話している／静か」を切り替えて確かめられます。プリセットはいくつでも作れます。</p>
+          </li>
+          <li>
+            <h3>組み合わせて CSS を出す</h3>
+            <p>
+              <span class="ui">ユーザー（ID）</span> と <span class="ui">プリセット（見た目）</span> を選ぶと、その 1 組の CSS が下に出ます。
+              <span class="ui">コピー</span> で写し取ります（<span class="ui">ダウンロード</span> でファイルにもできます）。
+            </p>
+            <p>よく使う組み合わせは <span class="ui">保存</span> しておくと、あとでクリック 1 つで呼び戻せます。</p>
+          </li>
+          <li class="obs" id="obs">
+            <h3>OBS に貼る</h3>
+            <ol>
+              <li>
+                <a href="https://streamkit.discord.com/overlay" target="_blank" rel="noopener">Discord Streamkit Overlay</a>
+                を開き、<span class="ui">Install for OBS</span> から Discord でログイン
+              </li>
+              <li><span class="ui">Voice Widget</span> を選び、サーバーとボイスチャンネルを選ぶ → 出てきた URL をコピー</li>
+              <li>OBS で ソースの <span class="ui">＋</span> → <span class="ui">ブラウザ</span> を追加し、<span class="ui">URL</span> にさっきの URL を貼る</li>
+              <li>幅・高さは OBS の画面（キャンバス）と同じ大きさにする（例: 1920 × 1080）</li>
+              <li><span class="ui">カスタム CSS</span> 欄の中身を<b>消してから</b>、③ でコピーした CSS を貼る → <span class="ui">OK</span></li>
+            </ol>
+            <p class="note">
+              <b>1 人につきブラウザソース 1 つ</b>です。3 人出したいなら、③ で 1 人ずつ CSS を出して、ブラウザソースを 3 つ作ります（URL はどれも同じで大丈夫）。
+            </p>
+          </li>
+        </ol>
+      </section>
+
+      <section id="faq">
+        <h2>うまくいかないとき</h2>
+        <p class="sub">よくあるつまずきと、その直し方です。</p>
+
+        <details>
+          <summary>立ち絵がまったく出ない</summary>
+          <div class="body">
+            <ul>
+              <li>カスタム CSS 欄に、最初から入っていた文字が残っていないか確かめる（全部消してから貼る）</li>
+              <li>① の Discord ユーザー ID が合っているか（名前ではなく数字の ID）</li>
+              <li>OBS が古いと効きません。OBS を最新にする</li>
+              <li>Streamkit の URL が、その人がいるサーバー・チャンネルのものか</li>
+            </ul>
+          </div>
+        </details>
+
+        <details>
+          <summary>立ち絵の位置が思ったところとずれる</summary>
+          <div class="body">
+            <ul>
+              <li>画像のまわりに透明な余白があると、その分ずれて見えます。② の <span class="ui">余白を詰める</span> を押す</li>
+              <li>ブラウザソースの幅・高さが OBS のキャンバスと違うと、位置の基準が変わります。同じ大きさにそろえる</li>
+            </ul>
+          </div>
+        </details>
+
+        <details>
+          <summary>話しても動かない</summary>
+          <div class="body">
+            <ul>
+              <li>② の <b>発話演出</b> がどれもオフだと動きません（ぴょこぴょこ・枠・後光・点滅のどれかをオンに）</li>
+              <li>Discord 側で、その人のマイクが反応しているか（Discord の通話画面で緑の枠が光るか）</li>
+              <li>OBS が古いと効きません</li>
+            </ul>
+          </div>
+        </details>
+
+        <details>
+          <summary>口パクしない・口の位置がずれる</summary>
+          <div class="body">
+            <ul>
+              <li>口を開けた絵は、立ち絵と<b>同じ縦横の大きさ・同じ構図</b>にする。違うとツールに警告が出ます</li>
+              <li>立ち絵を切り抜いたあとは、口を開けた絵も同じように切り抜いたものを入れ直す</li>
+              <li>③ に「口パクは出力 CSS に入りません」と出ていたら、立ち絵の画像を読み込めていません。画像を入れ直す</li>
+              <li>口パクは声の大きさではなく、一定の間隔で開け閉めします。速さは ② の <span class="ui">動きの速さ・周期</span> と <span class="ui">口パクの回数</span> で変えられます</li>
+            </ul>
+          </div>
+        </details>
+
+        <details>
+          <summary>画像を差し替えたのに OBS の見た目が変わらない</summary>
+          <div class="body">
+            <p>OBS に貼った CSS は、貼った時点のものです。画像や設定を変えたら、③ で CSS をコピーし直して、OBS のカスタム CSS を貼り替えてください。</p>
+          </div>
+        </details>
+
+        <details>
+          <summary>作った設定はどこに保存される？</summary>
+          <div class="body">
+            <p>
+              いま使っているブラウザの中にだけ保存されます。画像や ID がどこかのサーバーに送られることはありません。
+              そのかわり、別のパソコンや別のブラウザでは引き継がれません。ブラウザの閲覧データを消すと、設定も消えます。
+            </p>
+          </div>
+        </details>
+
+        <details>
+          <summary>画像の URL を貼ったら注意が出た</summary>
+          <div class="body">
+            <p>
+              Discord に貼った画像のリンクは、約 24 時間で見られなくなります。<span class="ui">URL の扱い</span> が「自動」なら、ツールが画像を CSS に埋め込むので、リンクが切れても立ち絵は消えません。
+              そのままで大丈夫です。
+            </p>
+          </div>
+        </details>
+      </section>
+
+      <div class="center" style="margin-top: 40px">
+        <a class="btn" href="./">ツールを開く</a>
+      </div>
+
+      <footer>
+        <p>
+          alfe 氏（@alfe_below）の「OBSのDiscord通話相手立ち絵表示ジェネレーター」に着想を得た独自実装です（alfe 氏のコード・素材は使っていません）。
+        </p>
+        <p>
+          <a href="https://github.com/max-enterme/obs-tachie-generator" target="_blank" rel="noopener">ソースコード（GitHub）</a>
+          ・MIT ライセンス
+        </p>
+      </footer>
+    </div>
+  </body>
+</html>
