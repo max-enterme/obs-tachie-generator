@@ -3,10 +3,14 @@ import {
   cropDataUri,
   dataUriBytes,
   detectTrimRect,
+  dragCropRect,
+  hitTestCrop,
   isFullRect,
   normalizeCropRect,
   readDimensions,
   screenToImagePoint,
+  type CropGrab,
+  type CropHandle,
   type CropRect,
 } from '../lib/crop'
 import type { Dimensions } from '../lib/image'
@@ -31,6 +35,33 @@ interface Pending {
  * この距離まで近づけば端に寄せる。端から数 px だけ削りたいときは数値入力で詰める。
  */
 const EDGE_SNAP_PX = 6
+
+/** 枠の辺・角を掴める距離（画面px）。見た目のハンドル（10px 角）より少し広くして掴み損ねを減らす。 */
+const HANDLE_HIT_PX = 8
+
+const HANDLES: CropHandle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w']
+
+/** 掴んだ所に応じたマウスカーソル（押す前に「何が起きるか」が分かるように）。 */
+const GRAB_CURSOR: Record<CropGrab, string> = {
+  n: 'ns-resize',
+  s: 'ns-resize',
+  e: 'ew-resize',
+  w: 'ew-resize',
+  nw: 'nwse-resize',
+  se: 'nwse-resize',
+  ne: 'nesw-resize',
+  sw: 'nesw-resize',
+  move: 'move',
+  draw: 'crosshair',
+}
+
+/** ドラッグ中の状態。`start` は押した時点の矩形（ハンドル・移動の基準）、`last` は直近に描いた矩形。 */
+interface Drag {
+  grab: CropGrab
+  from: { x: number; y: number }
+  start: CropRect | null
+  last: CropRect | null
+}
 
 /** バイト数を読みやすく。 */
 function formatBytes(n: number): string {
@@ -61,7 +92,9 @@ export default function CropEditor({ imageUrl, onApply }: Props) {
   const [info, setInfo] = useState('')
   const [error, setError] = useState('')
   const imgRef = useRef<HTMLImageElement>(null)
-  const dragging = useRef<{ x: number; y: number } | null>(null)
+  const dragging = useRef<Drag | null>(null)
+  /** マウスが乗っている所で起きる操作（カーソルの出し分け）。 */
+  const [hover, setHover] = useState<CropGrab>('draw')
 
   // 画像が変わったら、寸法も選択中の範囲も確認待ちも捨てる（前の画像の座標は意味を持たない）。
   useEffect(() => {
@@ -96,37 +129,68 @@ export default function CropEditor({ imageUrl, onApply }: Props) {
 
   const bytes = dataUriBytes(imageUrl)
 
-  /** 画面座標 → 画像のピクセル座標（画像の外は辺にクランプ、辺の近くは辺に吸着）。 */
-  function toImagePoint(clientX: number, clientY: number): { x: number; y: number } | null {
+  /**
+   * 画面座標 → 画像のピクセル座標（画像の外は辺にクランプ、辺の近くは辺に吸着）。
+   * 枠ごとの移動では吸着させない（端の近くで枠がカクっと跳ねる）。
+   */
+  function toImagePoint(
+    clientX: number,
+    clientY: number,
+    snapPx = EDGE_SNAP_PX,
+  ): { x: number; y: number } | null {
     const el = imgRef.current
     if (!el || !dims) return null
-    return screenToImagePoint(clientX, clientY, el.getBoundingClientRect(), dims, EDGE_SNAP_PX)
+    return screenToImagePoint(clientX, clientY, el.getBoundingClientRect(), dims, snapPx)
+  }
+
+  /** 押した位置で、枠のどこを掴んだか（ハンドル / 移動 / 描き直し）。 */
+  function grabAt(clientX: number, clientY: number): CropGrab {
+    const el = imgRef.current
+    if (!el || !dims) return 'draw'
+    return hitTestCrop(clientX, clientY, safeRect, el.getBoundingClientRect(), dims, HANDLE_HIT_PX)
   }
 
   function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     if (!dims) return
-    const p = toImagePoint(e.clientX, e.clientY)
+    const grab = grabAt(e.clientX, e.clientY)
+    const p = toImagePoint(e.clientX, e.clientY, grab === 'move' ? 0 : EDGE_SNAP_PX)
     if (!p) return
     e.currentTarget.setPointerCapture(e.pointerId)
-    dragging.current = p
-    setRect({ x: p.x, y: p.y, width: 0, height: 0 })
+    // 描き直しは押した点から始める。ハンドル・移動は動かすまで枠を変えない。
+    const first = grab === 'draw' ? { x: p.x, y: p.y, width: 0, height: 0 } : safeRect
+    dragging.current = { grab, from: p, start: safeRect, last: first }
+    setHover(grab)
+    setRect(first)
   }
 
   function onPointerMove(e: React.PointerEvent<HTMLDivElement>) {
-    const start = dragging.current
-    if (!start || !dims) return
-    const p = toImagePoint(e.clientX, e.clientY)
+    const drag = dragging.current
+    if (!dims) return
+    if (!drag) {
+      setHover(grabAt(e.clientX, e.clientY))
+      return
+    }
+    const p = toImagePoint(e.clientX, e.clientY, drag.grab === 'move' ? 0 : EDGE_SNAP_PX)
     if (!p) return
-    // 生の矩形（負の幅を含む）で持ち、確定時に normalizeCropRect が向きを正す。
-    setRect({ x: start.x, y: start.y, width: p.x - start.x, height: p.y - start.y })
+    const { grab, from, start } = drag
+    drag.last =
+      grab !== 'draw' && start
+        ? dragCropRect(grab, start, from, p, dims)
+        : // 生の矩形（負の幅を含む）で持ち、確定時に normalizeCropRect が向きを正す。
+          { x: from.x, y: from.y, width: p.x - from.x, height: p.y - from.y }
+    setRect(drag.last)
   }
 
   function onPointerUp(e: React.PointerEvent<HTMLDivElement>) {
-    if (!dragging.current || !dims) return
+    const drag = dragging.current
+    if (!drag || !dims) return
     dragging.current = null
     e.currentTarget.releasePointerCapture(e.pointerId)
     // ドラッグ終了時に整数矩形へ寄せる（数値入力と同じ値になる）。
-    setRect((r) => (r && dims ? normalizeCropRect(r, dims) : r))
+    const next = drag.last ? normalizeCropRect(drag.last, dims) : null
+    setRect(next)
+    const el = imgRef.current
+    if (el) setHover(hitTestCrop(e.clientX, e.clientY, next, el.getBoundingClientRect(), dims, HANDLE_HIT_PX))
   }
 
   /** 数値入力からの1辺の更新。 */
@@ -250,6 +314,7 @@ export default function CropEditor({ imageUrl, onApply }: Props) {
         <div className="crop-edit">
           <div
             className="crop-stage"
+            style={{ cursor: GRAB_CURSOR[hover] }}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
@@ -261,11 +326,20 @@ export default function CropEditor({ imageUrl, onApply }: Props) {
             {/* 画像の周りの余白（.crop-stage の padding）からも押し始められる＝端から選べる。 */}
             <div className="crop-frame">
               <img ref={imgRef} src={imageUrl} alt="" draggable={false} />
-              {boxStyle && <div className="crop-box" style={boxStyle} />}
+              {boxStyle && (
+                <div className="crop-box" style={boxStyle}>
+                  {/* 見た目だけ。掴めるかどうかは hitTestCrop が決める（ハンドルより少し広く掴める）。 */}
+                  {HANDLES.map((h) => (
+                    <span key={h} className="crop-handle" data-handle={h} />
+                  ))}
+                </div>
+              )}
             </div>
           </div>
           <p className="hint" style={{ marginTop: 0 }}>
-            点線の枠の中なら画像の外から押し始めても選べます。端の近くは端に吸い付きます。
+            枠の辺・角（白い四角）を掴むとその辺・角だけ動きます。枠の内側を掴むと枠ごと移動、
+            枠の外から押すと範囲を描き直します。点線の枠の中なら画像の外から押し始めても選べ、
+            端の近くは端に吸い付きます。
           </p>
 
           <div className="row">
