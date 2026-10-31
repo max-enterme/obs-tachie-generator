@@ -155,11 +155,9 @@ function normalizePreset(raw: unknown): Preset | null {
       typeof o.mouthImageUrl === 'string' && o.mouthImageUrl.trim() !== ''
         ? o.mouthImageUrl
         : undefined,
-    mouthIntervalMs:
-      typeof o.mouthIntervalMs === 'number' &&
-      Number.isFinite(o.mouthIntervalMs) &&
-      o.mouthIntervalMs > 0
-        ? o.mouthIntervalMs
+    mouthPerMove:
+      typeof o.mouthPerMove === 'number' && Number.isInteger(o.mouthPerMove) && o.mouthPerMove >= 1 && o.mouthPerMove <= 4
+        ? o.mouthPerMove
         : undefined,
   }
 }

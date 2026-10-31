@@ -7,6 +7,9 @@ import {
 } from './generateCss'
 import {
   DEFAULT_OPTIONS,
+  DEFAULT_SPEAK,
+  makeDefaultPreset,
+  presetToOptions,
   type GenerateOptions,
   type NameLabel,
   type SpeakEffect,
@@ -1066,6 +1069,12 @@ describe('generateCss (統一入口)', () => {
 })
 
 describe('口パク', () => {
+  it('C1-3 動きの速さに合わせた周期が出力に入る', () => {
+    const options = presetToOptions({ ...makeDefaultPreset('p'), imageUrl: MOUTH_USER.imageUrl, mouthImageUrl: MOUTH_USER.mouthImageUrl, speak: { ...DEFAULT_SPEAK, durationMs: 600 } }, 600, 900)
+    const css = generateCss([MOUTH_USER], options)
+    expect(css).toContain('600ms infinite alternate ease-in-out speak-jump')
+    expect(css).toContain('300ms infinite steps(1, end) speak-mouth')
+  })
   it('M10 口開き絵と実サイズがあれば変数・keyframe・animation が入る', () => {
     const css = generateCss([MOUTH_USER], opts({ imageNaturalWidth: 600, imageNaturalHeight: 900 }))
     expect(css).toContain('--img-mouth-url-123456789012345678: url("data:image/png;base64,MMMMNNNN");')

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { fileToDataUri, isWithinSizeLimit, measureNaturalSize } from '../lib/image'
 import { resolveImageSource } from '../lib/imageSource'
 import { mouthAspectNote } from '../lib/mouth'
-import { DEFAULT_MOUTH_INTERVAL_MS, type Preset } from '../lib/types'
+import { mouthIntervalForPreset, MOUTH_PER_MOVE_CHOICES, resolveMouthPerMove, type Preset } from '../lib/types'
 
 interface Props {
   preset: Preset
@@ -52,8 +52,8 @@ export default function MouthImageField({ preset, maxWidth, onChange }: Props): 
     <div className="field"><label htmlFor="pr-mouth-file">口開き絵のアップロード</label><input id="pr-mouth-file" type="file" accept="image/*" disabled={!enabled || busy} onChange={e=>void onFile(e.currentTarget.files?.[0])}/></div>
     <div className="field"><label htmlFor="pr-mouth-url">口開き絵のURL</label><input id="pr-mouth-url" type="url" value={url} disabled={!enabled || busy} onChange={e=>setUrl(e.target.value)}/></div>
     <button type="button" disabled={!enabled || busy} onClick={()=>void applyUrl()}>口開き絵のURLを反映</button>
-    {mouth && <div className="preset-image-row"><span className="thumb lg"><img src={mouth} alt="口開き絵"/></span><button type="button" onClick={()=>{setInfo(''); onChange({...preset,mouthImageUrl:undefined,mouthIntervalMs:undefined})}}>口開き絵を外す</button></div>}
-    <div className="field"><label htmlFor="pr-mouth-ms">口パクの周期(ms)</label><small>口閉じ→口開き→口閉じの1往復の長さ</small>{!mouth && enabled && <small>口開き絵を設定すると使えます</small>}<input id="pr-mouth-ms" type="number" min={50} step={10} disabled={!enabled || !mouth} value={preset.mouthIntervalMs ?? DEFAULT_MOUTH_INTERVAL_MS} onChange={e=>onChange({...preset,mouthIntervalMs:e.target.value === '' ? undefined : Number(e.target.value)})}/></div>
+    {mouth && <div className="preset-image-row"><span className="thumb lg"><img src={mouth} alt="口開き絵"/></span><button type="button" onClick={()=>{setInfo(''); onChange({...preset,mouthImageUrl:undefined,mouthPerMove:undefined})}}>口開き絵を外す</button></div>}
+    <div className="field"><label htmlFor="pr-mouth-per-move">口パクの回数（動き1回あたり）</label>{!mouth && enabled && <small>口開き絵を設定すると使えます</small>}<select id="pr-mouth-per-move" disabled={!enabled || !mouth} value={resolveMouthPerMove(preset.mouthPerMove)} onChange={e=>onChange({...preset,mouthPerMove:Number(e.target.value)})}>{MOUTH_PER_MOVE_CHOICES.map(n=><option key={n} value={n}>{n}回</option>)}</select><small>{`「動きの速さ・周期」に合わせて開閉します（いまは ${mouthIntervalForPreset(preset)}ms で 口閉じ→口開き→口閉じ）`}</small></div>
     {note && <p className="hint" style={{color:'var(--danger)'}} role="alert">{note}</p>}{busy && <p className="hint">処理中…</p>}{info && <p className="hint">{info}</p>}{error && <p className="hint" style={{color:'var(--danger)'}} role="alert">{error}</p>}
   </>
 }

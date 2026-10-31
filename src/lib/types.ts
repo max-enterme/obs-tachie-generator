@@ -218,8 +218,8 @@ export interface Preset {
   nameLabel: NameLabel
   /** 口開き絵。空・未指定なら口パクなし。 */
   mouthImageUrl?: string
-  /** 口閉じ→口開き→口閉じの 1 往復の長さ(ms)。 */
-  mouthIntervalMs?: number
+  /** 動き 1 回あたりの口パク回数(1〜4)。未指定は 2。 */
+  mouthPerMove?: number
 }
 
 /** 出力する「ユーザー × プリセット」の明示ペア（多対多）。保存リストの1件。 */
@@ -272,7 +272,7 @@ export function presetToOptions(
     hideWhenAway: p.hideWhenAway,
     speak: p.speak,
     nameLabel: p.nameLabel,
-    mouthIntervalMs: p.mouthIntervalMs,
+    mouthIntervalMs: mouthIntervalForPreset(p),
     imageNaturalWidth,
     imageNaturalHeight,
   }
@@ -366,6 +366,17 @@ export function resolveMouthIntervalMs(v?: number): number {
   if (v === undefined || !Number.isFinite(v) || v <= 0) return DEFAULT_MOUTH_INTERVAL_MS
   if (v < MIN_MOUTH_INTERVAL_MS) return MIN_MOUTH_INTERVAL_MS
   return v
+}
+
+/** 動き 1 回あたりの口パク回数の選択肢。 */
+export const MOUTH_PER_MOVE_CHOICES = [1, 2, 3, 4] as const
+/** 1〜4 の整数ならそのまま、それ以外は 2。 */
+export function resolveMouthPerMove(v?: number): number {
+  return Number.isInteger(v) && v! >= 1 && v! <= 4 ? v! : 2
+}
+/** 口パク周期(ms) = 動きの周期 ÷ 口パク回数。 */
+export function mouthIntervalForPreset(p: Pick<Preset, 'speak' | 'mouthPerMove'>): number {
+  return resolveMouthIntervalMs(p.speak.durationMs / resolveMouthPerMove(p.mouthPerMove))
 }
 
 /** 既定の演出。 */
