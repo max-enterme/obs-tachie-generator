@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import CropEditor from './CropEditor'
+import MouthImageField from './MouthImageField'
 import { fileToDataUri, isWithinSizeLimit } from '../lib/image'
 import { resolveImageSource, type ImageSourceMode } from '../lib/imageSource'
 import { requiredSpeakMargin, speakMarginNote } from '../lib/speakMargin'
@@ -479,6 +480,7 @@ export default function PresetPanel({
               </div>
             </div>
 
+            <MouthImageField preset={editing} maxWidth={maxWidth} onChange={onChange} />
             <div className="subhead">名前表示</div>
             <label className="toggle" htmlFor="pr-name-show">
               <input

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { generateCss } from '../lib/generateCss'
+import { generateCss, tachieBoxSize } from '../lib/generateCss'
 import { copyText, cssFilename, downloadText } from '../lib/download'
 import { presetToOptions, renderUser, type AppUser, type Preset } from '../lib/types'
 
@@ -44,6 +44,7 @@ export default function OutputPanel({ user, preset, imageNaturalWidth, imageNatu
     (label?.align !== 'left' || (label.background && label.fit === 'stretch'))
   const alignUnavailable =
     needsBoxWidth && (preset?.width == null || preset.width <= 0) && imageNaturalWidth == null
+  const mouthUnavailable = (preset?.mouthImageUrl ?? '').trim() !== '' && tachieBoxSize(preset?.width ?? undefined, imageNaturalWidth ?? undefined, imageNaturalHeight ?? undefined) === null
 
   async function onCopy() {
     if (!out) return
@@ -68,6 +69,7 @@ export default function OutputPanel({ user, preset, imageNaturalWidth, imageNatu
           <b style={{ color: 'var(--text)' }}>幅 width(px)</b> を指定すると確実に入ります。
         </p>
       )}
+      {mouthUnavailable && <p className="hint" style={{ color: 'var(--warn)' }} role="status">口パクは出力CSSに入りません（立ち絵の実サイズが測れていません。画像が読み込めているか確認してください）</p>}
 
       {!out ? (
         <p className="empty">ユーザーとプリセットを選ぶと、ここに CSS が出ます。</p>

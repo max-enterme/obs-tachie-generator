@@ -11,7 +11,7 @@ import {
   type AxisPlacement,
   type Placement,
 } from '../lib/generateCss'
-import { resolveAnchors, type Preset } from '../lib/types'
+import { resolveAnchors, resolveMouthIntervalMs, type Preset } from '../lib/types'
 
 interface Props {
   /** プレビューに映すプリセット（見た目の source）。null なら空ビューポート。 */
@@ -102,6 +102,15 @@ export default function TachiePreview({
 
   // 発話演出が出るのは「通話中 かつ 発話中」だけ。
   const effectiveSpeaking = inCall && speaking
+  const mouthUrl = (preset?.mouthImageUrl ?? '').trim()
+  const [mouthOpen, setMouthOpen] = useState(false)
+  useEffect(() => {
+    if (effectiveSpeaking && mouthUrl !== '') {
+      const t = window.setInterval(() => setMouthOpen((o) => !o), resolveMouthIntervalMs(preset?.mouthIntervalMs) / 2)
+      return () => { window.clearInterval(t); setMouthOpen(false) }
+    }
+    setMouthOpen(false)
+  }, [effectiveSpeaking, mouthUrl, preset?.mouthIntervalMs])
   // 幅は 明示指定 > 画像の実サイズ > 仮幅 の順。
   const effWidth = width ?? naturalW ?? FALLBACK_WIDTH
   const widthPct = (effWidth / REF_W) * 100
@@ -265,9 +274,9 @@ export default function TachiePreview({
             <img
               className="tp-img"
               style={figStyle}
-              src={preset.imageUrl}
+              src={mouthOpen && mouthUrl !== '' ? preset.mouthImageUrl : preset.imageUrl}
               alt={preset.name || 'プリセット'}
-              onLoad={(e) => setNaturalW(e.currentTarget.naturalWidth || null)}
+              onLoad={(e) => { if (e.currentTarget.getAttribute('src') === preset.imageUrl) setNaturalW(e.currentTarget.naturalWidth || null) }}
             />
           ) : (
             <div className="tp-placeholder" style={figStyle} aria-label="画像未設定">
