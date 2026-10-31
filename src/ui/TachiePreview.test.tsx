@@ -18,6 +18,7 @@ describe('TachiePreview 口パク', () => {
     act(() => vi.advanceTimersByTime(150)); expect(img().getAttribute('src')).toBe('data:B')
     act(() => vi.advanceTimersByTime(150)); expect(img().getAttribute('src')).toBe('data:A')
     fireEvent.click(screen.getByRole('button', { name: /^立ち絵プレビュー。クリックで発話⇄静かを切替。現在: 通話中・発話中$/ }))
+    act(() => vi.advanceTimersByTime(150)); expect(img().getAttribute('src')).toBe('data:A')
     act(() => vi.advanceTimersByTime(300)); expect(img().getAttribute('src')).toBe('data:A')
     vi.useRealTimers()
   })
@@ -47,4 +48,3 @@ describe('TachiePreview 口パク', () => {
     vi.useRealTimers()
   })
 })
-
