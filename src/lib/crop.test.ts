@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   computeTrimBounds,
   dataUriBytes,
+  dragCropRect,
+  hitTestCrop,
   isFullRect,
   normalizeCropRect,
   screenToImagePoint,
@@ -139,6 +141,115 @@ describe('screenToImagePoint', () => {
 
   it('表示サイズが潰れていたら null', () => {
     expect(screenToImagePoint(0, 0, { left: 0, top: 0, width: 0, height: 10 }, dims, 6)).toBeNull()
+  })
+})
+
+describe('hitTestCrop', () => {
+  // 600×900 の画像を 200×300 で表示（1 画面px = 3 画像px）。枠は画像の (150,300)〜(450,600)
+  // ＝画面の (150,150)〜(250,250)。
+  const dims = { width: 600, height: 900 }
+  const box = { left: 100, top: 50, width: 200, height: 300 }
+  const rect = { x: 150, y: 300, width: 300, height: 300 }
+  const hit = (x: number, y: number, r: CropRect | null = rect) => hitTestCrop(x, y, r, box, dims, 8)
+
+  it('四隅は角のハンドル（枠の内外どちらから押しても）', () => {
+    expect(hit(150, 150)).toBe('nw')
+    expect(hit(145, 145)).toBe('nw')
+    expect(hit(255, 145)).toBe('ne')
+    expect(hit(146, 254)).toBe('sw')
+    expect(hit(252, 248)).toBe('se')
+  })
+
+  it('四辺の中ほどは辺のハンドル', () => {
+    expect(hit(200, 144)).toBe('n')
+    expect(hit(200, 256)).toBe('s')
+    expect(hit(144, 200)).toBe('w')
+    expect(hit(256, 200)).toBe('e')
+    expect(hit(155, 200)).toBe('w')
+  })
+
+  it('hitPx を超えて離れた所は掴まない', () => {
+    expect(hit(141, 200)).toBe('draw')
+    expect(hit(200, 259)).toBe('draw')
+  })
+
+  it('辺の延長線上でも枠から離れていればハンドルにしない', () => {
+    // 左辺の延長（x=150）だが、枠の下端から 30px 下
+    expect(hit(150, 280)).toBe('draw')
+  })
+
+  it('枠の内側は移動、外側は描き直し', () => {
+    expect(hit(200, 200)).toBe('move')
+    expect(hit(120, 100)).toBe('draw')
+    expect(hit(280, 300)).toBe('draw')
+  })
+
+  it('枠が画像全体なら、内側は描き直し（辺の近くはハンドル）', () => {
+    const full = { x: 0, y: 0, width: 600, height: 900 }
+    expect(hit(200, 200, full)).toBe('draw')
+    expect(hit(103, 200, full)).toBe('w')
+    expect(hit(94, 44, full)).toBe('nw')
+  })
+
+  it('小さい枠でも内側の中央は移動になる', () => {
+    // 画面で 12×12 の枠（内側へのハンドル幅は 12/4 = 3px に抑えられる）
+    const small = { x: 300, y: 450, width: 36, height: 36 }
+    expect(hit(206, 206, small)).toBe('move')
+    expect(hit(201, 206, small)).toBe('w')
+    expect(hit(211, 211, small)).toBe('se')
+  })
+
+  it('枠が無ければ描き直し', () => {
+    expect(hit(200, 200, null)).toBe('draw')
+  })
+})
+
+describe('dragCropRect', () => {
+  const dims = { width: 600, height: 900 }
+  const start = { x: 100, y: 200, width: 300, height: 400 }
+  const from = { x: 0, y: 0 } // ハンドル操作では使わない
+
+  it('辺のハンドルはその辺だけ動かす', () => {
+    expect(dragCropRect('w', start, from, { x: 50, y: 999 }, dims)).toEqual({ x: 50, y: 200, width: 350, height: 400 })
+    expect(dragCropRect('e', start, from, { x: 500, y: 0 }, dims)).toEqual({ x: 100, y: 200, width: 400, height: 400 })
+    expect(dragCropRect('n', start, from, { x: 0, y: 300 }, dims)).toEqual({ x: 100, y: 300, width: 300, height: 300 })
+    expect(dragCropRect('s', start, from, { x: 0, y: 900 }, dims)).toEqual({ x: 100, y: 200, width: 300, height: 700 })
+  })
+
+  it('角のハンドルは2辺を動かす', () => {
+    expect(dragCropRect('nw', start, from, { x: 0, y: 0 }, dims)).toEqual({ x: 0, y: 0, width: 400, height: 600 })
+    expect(dragCropRect('se', start, from, { x: 250, y: 400 }, dims)).toEqual({ x: 100, y: 200, width: 150, height: 200 })
+    expect(dragCropRect('ne', start, from, { x: 600, y: 100 }, dims)).toEqual({ x: 100, y: 100, width: 500, height: 500 })
+    expect(dragCropRect('sw', start, from, { x: 200, y: 700 }, dims)).toEqual({ x: 200, y: 200, width: 200, height: 500 })
+  })
+
+  it('反対の辺を越えず、最低 1px 残して止まる', () => {
+    expect(dragCropRect('w', start, from, { x: 550, y: 0 }, dims)).toEqual({ x: 399, y: 200, width: 1, height: 400 })
+    expect(dragCropRect('se', start, from, { x: 0, y: 0 }, dims)).toEqual({ x: 100, y: 200, width: 1, height: 1 })
+  })
+
+  it('移動は差分だけずらし、大きさは変えない', () => {
+    expect(dragCropRect('move', start, { x: 200, y: 300 }, { x: 250, y: 250 }, dims)).toEqual({
+      x: 150,
+      y: 150,
+      width: 300,
+      height: 400,
+    })
+  })
+
+  it('移動は画像の外へ出ない', () => {
+    expect(dragCropRect('move', start, { x: 200, y: 300 }, { x: 0, y: 0 }, dims)).toEqual({
+      x: 0,
+      y: 0,
+      width: 300,
+      height: 400,
+    })
+    expect(dragCropRect('move', start, { x: 200, y: 300 }, { x: 600, y: 900 }, dims)).toEqual({
+      x: 300,
+      y: 500,
+      width: 300,
+      height: 400,
+    })
   })
 })
 

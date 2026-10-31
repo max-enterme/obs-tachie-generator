@@ -689,6 +689,29 @@ button:disabled {
   box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
 }
 
+/*
+ * 枠の辺・角のハンドル（見た目だけ。掴める範囲は hitTestCrop が決める）。
+ * 画像の端にある辺のハンドルは .crop-frame の overflow で半分隠れるが、位置は分かる。
+ */
+.crop-handle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  box-sizing: border-box;
+  background: #fff;
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+}
+.crop-handle[data-handle='nw'] { left: 0; top: 0; }
+.crop-handle[data-handle='n'] { left: 50%; top: 0; }
+.crop-handle[data-handle='ne'] { left: 100%; top: 0; }
+.crop-handle[data-handle='e'] { left: 100%; top: 50%; }
+.crop-handle[data-handle='se'] { left: 100%; top: 100%; }
+.crop-handle[data-handle='s'] { left: 50%; top: 100%; }
+.crop-handle[data-handle='sw'] { left: 0; top: 100%; }
+.crop-handle[data-handle='w'] { left: 0; top: 50%; }
+
 /* 破壊的な操作なので、確認は目立つ枠で出す（見落として押し切られないように）。 */
 .crop-confirm {
   border: 1px solid var(--warn);
