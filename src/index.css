@@ -168,6 +168,14 @@ code {
   align-items: start;
 }
 
+.seat-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 360px) minmax(0, 1fr);
+  gap: 16px;
+  margin-bottom: 16px;
+  align-items: start;
+}
+
 /* 排他セグメント（アップロード ⇄ 画像URL） */
 .seg {
   display: inline-flex;
@@ -205,7 +213,8 @@ code {
   white-space: nowrap;
 }
 
-.pair-item.active {
+.pair-item.active,
+.pair-item[aria-current='true'] {
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 12%, var(--panel-2));
 }
@@ -213,6 +222,9 @@ code {
 @media (max-width: 860px) {
   .preset-top,
   .combine-grid {
+    grid-template-columns: 1fr;
+  }
+  .seat-grid {
     grid-template-columns: 1fr;
   }
 }

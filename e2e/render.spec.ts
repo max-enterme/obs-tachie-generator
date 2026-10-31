@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
-import { generateStandaloneCss } from '../src/lib/generateCss'
-import { DEFAULT_OPTIONS, type GenerateOptions, type TachieUser } from '../src/lib/types'
+import { generateSeatCss, generateStandaloneCss } from '../src/lib/generateCss'
+import { DEFAULT_OPTIONS, DEFAULT_SPEAK, makeDefaultPreset, presetToOptions, seatPreset, type GenerateOptions, type TachieUser } from '../src/lib/types'
 
 /** 一色 600×900 の PNG を canvas で作って data URI にする。 */
 async function makeColorImageDataUrl(page: Page, color: '#ff0000' | '#0000ff'): Promise<string> {
@@ -260,4 +260,68 @@ test('R7 ぴょこぴょこ・枠・後光と併用しても切り替わる', as
     await seekMouthAnimation(page, time)
     await expectMouthColor(page, 'blue', 'red', false)
   }
+})
+
+/** 席の CSS と、通話にいる人ぶんの img を置く。speaking なら発話クラスを付ける。 */
+async function renderSeatPage(page: Page, imgs: Array<{ id: string; speaking?: boolean }>): Promise<void> {
+  const redUrl = await makeColorImageDataUrl(page, '#ff0000')
+  const blueUrl = await makeColorImageDataUrl(page, '#0000ff')
+  const seat = { anchorX: 'right' as const, anchorY: 'bottom' as const, left: 0, bottom: 0 }
+  const preset1 = { ...makeDefaultPreset('p1'), imageUrl: redUrl, width: 300, anchorX: 'left' as const, speak: { ...DEFAULT_SPEAK, outline: false } }
+  const preset2 = { ...makeDefaultPreset('p2'), imageUrl: blueUrl, width: 300, anchorX: 'center' as const, speak: { ...DEFAULT_SPEAK, outline: false } }
+  const candidates = [
+    { user: { id: '42', name: 'render-red', imageUrl: redUrl }, options: presetToOptions(seatPreset(preset1, seat), 600, 900) },
+    { user: { id: '43', name: 'render-blue', imageUrl: blueUrl }, options: presetToOptions(seatPreset(preset2, seat), 600, 900) },
+  ]
+  const css = generateSeatCss('render-seat', candidates)
+  const images = imgs.map(({ id, speaking }) => `<img src="http://127.0.0.1:9/avatars/${id}.png"${speaking ? ' class="Voice_avatarSpeaking__x"' : ''}>`).join('')
+  await page.setContent(`<style>html{background:#ffffff}</style><style>${css}</style><body>${images}</body>`)
+}
+
+test('R8 席: 1 番目だけ在室なら 1 番目だけ、席の位置に描かれる', async ({ page }) => {
+  await renderSeatPage(page, [{ id: '42' }])
+  const red = await pollBoundingBox(page)
+  expectClose(red.left, 1620)
+  expectClose(red.right, 1920)
+  expectClose(red.bottom, 1080)
+  expectClose((await measureColorBoundingBox(page, 'blue')).right, 0)
+})
+
+test('R9 席: 2 番目だけ在室なら 2 番目が同じ席の位置に描かれる', async ({ page }) => {
+  await renderSeatPage(page, [{ id: '43' }])
+  const blue = await expect.poll(async () => (await measureColorBoundingBox(page, 'blue')).right, { timeout: 5000 }).toBeGreaterThan(0)
+  void blue
+  const box = await measureColorBoundingBox(page, 'blue')
+  expectClose(box.left, 1620)
+  expectClose(box.right, 1920)
+  expectClose(box.bottom, 1080)
+  expectClose((await measureColorBoundingBox(page, 'red')).right, 0)
+})
+
+test('R10 席: 2 人とも在室なら上の候補だけ', async ({ page }) => {
+  await renderSeatPage(page, [{ id: '43' }, { id: '42' }])
+  const red = await pollBoundingBox(page)
+  expectClose(red.left, 1620)
+  expectClose(red.right, 1920)
+  expectClose(red.bottom, 1080)
+  expectClose((await measureColorBoundingBox(page, 'blue')).right, 0)
+})
+
+test('R11 席: 誰もいなければ何も描かれない', async ({ page }) => {
+  await renderSeatPage(page, [])
+  expect(await page.evaluate(() => [getComputedStyle(document.body, '::after').content, getComputedStyle(document.body, '::before').content])).toEqual(['none', 'none'])
+})
+
+test('R12 席: 出ていない候補が話しても、出ている候補は動かない', async ({ page }) => {
+  await renderSeatPage(page, [{ id: '42' }, { id: '43', speaking: true }])
+  const names = await page.evaluate(() => document.getAnimations().filter((item) => item instanceof CSSAnimation).map((item) => (item as CSSAnimation).animationName))
+  expect(names.some((name) => name.endsWith('-c1'))).toBe(false)
+  expect(names.some((name) => name.endsWith('-c2'))).toBe(false)
+})
+
+test('R13 席: 出ている候補が話すとその候補の演出だけ動く', async ({ page }) => {
+  await renderSeatPage(page, [{ id: '42', speaking: true }, { id: '43' }])
+  const names = await page.evaluate(() => document.getAnimations().filter((item) => item instanceof CSSAnimation).map((item) => (item as CSSAnimation).animationName))
+  expect(names).toContain('speak-jump-c1')
+  expect(names.some((name) => name.endsWith('-c2'))).toBe(false)
 })

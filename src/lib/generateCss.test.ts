@@ -1151,3 +1151,100 @@ describe('入力の頑健性', () => {
     expect(css).toContain('url("https://ex.com/a\\".png")')
   })
 })
+
+import { generateSeatCss, seatActiveSelector, type SeatCandidate } from './generateCss'
+
+const SEAT_A: TachieUser = {
+  id: '111111111111111111', name: 'ゲストA', imageUrl: 'data:image/png;base64,AAAA',
+}
+const SEAT_B: TachieUser = {
+  id: '222222222222222222', name: 'ゲストB', imageUrl: 'data:image/png;base64,BBBB',
+}
+const SEAT_OPTS = presetToOptions(makeDefaultPreset('p'), 600, 900)
+const SEAT_CANDIDATES: SeatCandidate[] = [
+  { user: SEAT_A, options: SEAT_OPTS },
+  { user: SEAT_B, options: SEAT_OPTS },
+]
+const SEAT_SA = 'body:has(img[src*="avatars/111111111111111111"])'
+const SEAT_SB = 'body:has(img[src*="avatars/222222222222222222"])'
+
+describe('seatActiveSelector', () => {
+  it('S1 1 人目は :not なし、k 人目は上の全員を :not で除く', () => {
+    expect(seatActiveSelector(['111', '2a22', '333'], 0)).toBe('body:has(img[src*="avatars/111"])')
+    expect(seatActiveSelector(['111', '2a22', '333'], 1)).toBe('body:has(img[src*="avatars/222"]):not(:has(img[src*="avatars/111"]))')
+    expect(seatActiveSelector(['111', '2a22', '333'], 2)).toBe('body:has(img[src*="avatars/333"]):not(:has(img[src*="avatars/111"])):not(:has(img[src*="avatars/222"]))')
+  })
+})
+
+describe('generateSeatCss', () => {
+  it('S2 候補 0 人は案内のコメントだけ', () => {
+    expect(generateSeatCss('ゲスト席', [])).toBe('/* 席に候補がいません。④ で候補を追加してください。 */\n')
+  })
+
+  it('S3 候補 2 人の立ち絵は排他の条件で出る', () => {
+    const css = generateSeatCss('ゲスト席', SEAT_CANDIDATES)
+    expect(css).toContain(`${SEAT_SA}::after {`)
+    expect(css).toContain(`${SEAT_SB}:not(:has(img[src*="avatars/111111111111111111"]))::after {`)
+    expect(css.split('\n').some((line) => line.startsWith('body::after {'))).toBe(false)
+    expect(css.startsWith('/* 席「ゲスト席」: 候補 2 人。')).toBe(true)
+  })
+
+  it('S4 keyframe 名は候補ごとに別', () => {
+    const css = generateSeatCss('ゲスト席', SEAT_CANDIDATES)
+    expect(css).toContain('@keyframes speak-jump-c1 {')
+    expect(css).toContain('@keyframes speak-jump-c2 {')
+    expect(css).toContain('@keyframes speak-light-c1 {')
+    expect(css).toContain('750ms infinite alternate ease-in-out speak-jump-c2')
+    expect(css).not.toContain('@keyframes speak-jump {')
+  })
+
+  it('S5 発話中ルールは出ている条件と本人の発話の両方', () => {
+    const css = generateSeatCss('ゲスト席', SEAT_CANDIDATES)
+    expect(css).toContain(`${SEAT_SB}:not(:has(img[src*="avatars/111111111111111111"])):has(img[src*="avatars/222222222222222222"][class*="Voice_avatarSpeaking__"])::after {`)
+  })
+
+  it('S6 名前は候補ごとの ::before に出る', () => {
+    const options = { ...SEAT_OPTS, nameLabel: { ...DEFAULT_OPTIONS.nameLabel, show: true } }
+    const css = generateSeatCss('ゲスト席', [
+      { user: { ...SEAT_A, displayName: 'エー' }, options },
+      { user: { ...SEAT_B, displayName: 'ビー' }, options },
+    ])
+    expect(css).toContain(`${SEAT_SA}::before {\n  content: "エー";`)
+    expect(css).toContain(`${SEAT_SB}:not(:has(img[src*="avatars/111111111111111111"]))::before {\n  content: "ビー";`)
+  })
+
+  it('S7 名前 OFF の候補は ::before を出さない', () => {
+    const css = generateSeatCss('ゲスト席', SEAT_CANDIDATES)
+    expect(css).not.toContain('::before {')
+    expect(css).toContain('[class*="Voice_name__"], [class*="Voice_user__"] {')
+  })
+
+  it('S8 プリセットの「通話にいないときは隠す」は席では効かない', () => {
+    const css = generateSeatCss('ゲスト席', [{ user: SEAT_A, options: { ...SEAT_OPTS, hideWhenAway: true } }])
+    const after = css.slice(css.indexOf(`${SEAT_SA}::after {`), css.indexOf('\n}', css.indexOf(`${SEAT_SA}::after {`)))
+    expect(after).toContain('display: block;')
+    expect(after).not.toContain('display: none;')
+  })
+
+  it('S9 口開き絵は実サイズが測れた候補だけ', () => {
+    const css = generateSeatCss('ゲスト席', [
+      { user: { ...SEAT_A, mouthImageUrl: 'data:image/png;base64,MMMM' }, options: SEAT_OPTS },
+      { user: { ...SEAT_B, mouthImageUrl: 'data:image/png;base64,NNNN' }, options: presetToOptions(makeDefaultPreset('p')) },
+    ])
+    expect(css).toContain('--img-mouth-url-111111111111111111')
+    expect(css).toContain('@keyframes speak-mouth-c1 {')
+    expect(css).toContain('steps(1, end) speak-mouth-c1')
+    expect(css).not.toContain('--img-mouth-url-222222222222222222')
+    expect(css).not.toContain('speak-mouth-c2')
+  })
+
+  it('S10 席の名前でコメントを閉じられない', () => {
+    const css = generateSeatCss('a*/b{}', [{ user: SEAT_A, options: SEAT_OPTS }])
+    expect(css.startsWith('/* 席「a* /b{}」: 候補 1 人。')).toBe(true)
+    expect(css.split('\n')[0].match(/\*\//g)).toHaveLength(1)
+  })
+
+  it('S11 席の名前が空なら「無名の席」', () => {
+    expect(generateSeatCss('  ', [{ user: SEAT_A, options: SEAT_OPTS }])).toMatch(/^\/\* 席「無名の席」: 候補 1 人。/)
+  })
+})
