@@ -6,6 +6,7 @@ import {
   isFullRect,
   normalizeCropRect,
   readDimensions,
+  screenToImagePoint,
   type CropRect,
 } from '../lib/crop'
 import type { Dimensions } from '../lib/image'
@@ -24,6 +25,12 @@ interface Pending {
   /** どの操作から来たか（確認文言の出し分け）。 */
   source: 'trim' | 'rect'
 }
+
+/**
+ * 辺への吸着距離（画面px）。縮小表示では端ぴったりが 1 画面px 未満の的になるので、
+ * この距離まで近づけば端に寄せる。端から数 px だけ削りたいときは数値入力で詰める。
+ */
+const EDGE_SNAP_PX = 6
 
 /** バイト数を読みやすく。 */
 function formatBytes(n: number): string {
@@ -89,16 +96,11 @@ export default function CropEditor({ imageUrl, onApply }: Props) {
 
   const bytes = dataUriBytes(imageUrl)
 
-  /** 画面座標 → 画像のピクセル座標。 */
+  /** 画面座標 → 画像のピクセル座標（画像の外は辺にクランプ、辺の近くは辺に吸着）。 */
   function toImagePoint(clientX: number, clientY: number): { x: number; y: number } | null {
     const el = imgRef.current
     if (!el || !dims) return null
-    const b = el.getBoundingClientRect()
-    if (b.width < 1 || b.height < 1) return null
-    return {
-      x: ((clientX - b.left) / b.width) * dims.width,
-      y: ((clientY - b.top) / b.height) * dims.height,
-    }
+    return screenToImagePoint(clientX, clientY, el.getBoundingClientRect(), dims, EDGE_SNAP_PX)
   }
 
   function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
@@ -252,11 +254,19 @@ export default function CropEditor({ imageUrl, onApply }: Props) {
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
             onPointerCancel={onPointerUp}
+            // 既存の選択範囲や画像を掴んだネイティブのドラッグ＆ドロップが始まると pointercancel で途切れる。
+            onDragStart={(e) => e.preventDefault()}
             aria-label="ドラッグで切り抜く範囲を指定（数値入力でも指定できます）"
           >
-            <img ref={imgRef} src={imageUrl} alt="" draggable={false} />
-            {boxStyle && <div className="crop-box" style={boxStyle} />}
+            {/* 画像の周りの余白（.crop-stage の padding）からも押し始められる＝端から選べる。 */}
+            <div className="crop-frame">
+              <img ref={imgRef} src={imageUrl} alt="" draggable={false} />
+              {boxStyle && <div className="crop-box" style={boxStyle} />}
+            </div>
           </div>
+          <p className="hint" style={{ marginTop: 0 }}>
+            点線の枠の中なら画像の外から押し始めても選べます。端の近くは端に吸い付きます。
+          </p>
 
           <div className="row">
             {(
