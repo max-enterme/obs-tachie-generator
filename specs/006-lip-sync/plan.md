@@ -300,7 +300,7 @@ export function mouthIntervalForPreset(p: Pick<Preset, 'speak' | 'mouthPerMove'>
 | 項目 | 値 |
 |---|---|
 | 欄 | `<select id="pr-mouth-per-move">`、ラベル `口パクの回数（動き1回あたり）`、選択肢 `1回` `2回` `3回` `4回`(value 1〜4)、既定 `2回` |
-| 補足(常に・ラベルの外の `small`) | `「動きの速さ・周期」に合わせて開閉します（いまは {N}ms で 口閉じ→口開き→口閉じ）`。{N} は `mouthIntervalForPreset(preset)` を `String()` したもの(187.5 はそのまま) |
+| 補足(常に・ラベルの外の `small`) | `「動きの速さ・周期」に合わせて開閉します（いまは {N}ms で 口閉じ→口開き→口閉じ）`。{N} は `mouthIntervalForPreset(preset)` を**表示だけ**小数第 1 位に丸めたもの(187.5 はそのまま、1000÷3 は 333.3。CSS 側は丸めない) |
 | 口開き絵が未設定のとき | 欄は無効、補足 `口開き絵を設定すると使えます`(従来どおり併記) |
 | 立ち絵が未設定のとき | 欄は無効(従来どおり) |
 
