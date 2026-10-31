@@ -8,7 +8,7 @@ feature: lip-sync
 > `- [ ]` 未完 / `- [x]` 完了。採番後に `<!-- #12 -->` の形で sub-issue 番号を書く。
 > **未採番のうちはコメントごと書かない**(空のプレースホルダは採番済みと誤読される。SPEC-OPS §04)。
 
-- [ ] T1: 口パクの保存データと周期の解決(Preset / TachieUser / GenerateOptions のフィールド・resolveMouthIntervalMs・normalizePreset・mouthAspectNote)と単体テスト  <!-- #58 -->
+- [x] T1: 口パクの保存データと周期の解決(Preset / TachieUser / GenerateOptions のフィールド・resolveMouthIntervalMs・normalizePreset・mouthAspectNote)と単体テスト  <!-- #58 -->
 - [ ] T2: 出力CSSに口パクを出す(rootBlock の口開き絵の変数・speak-mouth の keyframe・発話中ルールの animation)と単体テスト(T1 の後)  <!-- #59 -->
 - [ ] T3: プリセット編集の口パク欄・プレビューの交互切替・出力パネルの注意と画面テスト(T1 の後)  <!-- #60 -->
 - [ ] T4: 実ブラウザ(Playwright)で発話中に立ち絵と口開き絵が周期どおり切り替わることを検証する(T2 の後)  <!-- #61 -->

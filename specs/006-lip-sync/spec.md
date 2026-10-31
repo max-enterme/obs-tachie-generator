@@ -3,7 +3,7 @@ feature: lip-sync
 issue: 57
 release: r4
 priority: should
-status: 未着手
+status: 進行中
 ---
 
 # 口パク(話している間だけ口開きの絵と交互に切り替える)
