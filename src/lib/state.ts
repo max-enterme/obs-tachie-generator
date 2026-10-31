@@ -15,6 +15,7 @@ import {
   type Pairing,
   type Preset,
   type Selection,
+  type Seat,
   type SpeakEffect,
 } from './types'
 
@@ -22,7 +23,7 @@ import {
  * 設定の永続化。data URI は数MB規模になり URL 共有には載らないため localStorage のみを使う
  * （URL 永続化は data URI サイズの都合で採用しない）。
  *
- * 保存形は新データモデル `{ users: AppUser[]; presets: Preset[]; pairings: Pairing[] }`。
+ * 保存形は新データモデル `{ users: AppUser[]; presets: Preset[]; pairings: Pairing[]; seats: Seat[] }`。
  * `normalizeState` は純粋・決定的（乱数 / randomUUID / Date.now を使わない）。id 生成が要る箇所は
  * UI 側で `newId()` を使う。
  */
@@ -30,7 +31,7 @@ import {
 const STORAGE_KEY = 'obs-tachie-generator:v1'
 
 function emptyState(): AppState {
-  return { users: [], presets: [], pairings: [], selection: { ...EMPTY_SELECTION } }
+  return { users: [], presets: [], pairings: [], selection: { ...EMPTY_SELECTION }, seats: [] }
 }
 
 /** 作業中選択を検証する。存在しない userId / presetId を指す選択は null に落とす（純粋・決定的）。 */
@@ -60,6 +61,31 @@ function isPairing(v: unknown): v is Pairing {
   if (typeof v !== 'object' || v === null) return false
   const p = v as Record<string, unknown>
   return typeof p.userId === 'string' && typeof p.presetId === 'string'
+}
+
+function normalizeSeat(raw: unknown, userIds: Set<string>, presetIds: Set<string>): Seat | null {
+  if (typeof raw !== 'object' || raw === null) return null
+  const s = raw as Record<string, unknown>
+  if (typeof s.id !== 'string' || s.id.trim() === '') return null
+  const candidates: Pairing[] = []
+  const seenUsers = new Set<string>()
+  if (Array.isArray(s.candidates)) {
+    for (const candidate of s.candidates) {
+      if (!isPairing(candidate) || !userIds.has(candidate.userId) || !presetIds.has(candidate.presetId)) continue
+      if (seenUsers.has(candidate.userId)) continue
+      seenUsers.add(candidate.userId)
+      candidates.push({ userId: candidate.userId, presetId: candidate.presetId })
+    }
+  }
+  return {
+    id: s.id,
+    name: typeof s.name === 'string' ? s.name : '',
+    anchorX: s.anchorX === 'left' || s.anchorX === 'center' || s.anchorX === 'right' ? s.anchorX : DEFAULT_ANCHOR_X,
+    anchorY: s.anchorY === 'top' || s.anchorY === 'middle' || s.anchorY === 'bottom' ? s.anchorY : DEFAULT_ANCHOR_Y,
+    left: typeof s.left === 'number' && Number.isFinite(s.left) ? s.left : 0,
+    bottom: typeof s.bottom === 'number' && Number.isFinite(s.bottom) ? s.bottom : 0,
+    candidates,
+  }
 }
 
 /** 発話演出を既定で補完する（欠損・型不一致は既定値）。 */
@@ -203,8 +229,17 @@ export function normalizeState(raw: unknown): AppState {
     .map((p) => ({ userId: p.userId, presetId: p.presetId }))
 
   const selection = normalizeSelection(obj.selection, userIds, presetIds)
+  const seenSeatIds = new Set<string>()
+  const seats: Seat[] = (Array.isArray(obj.seats) ? obj.seats : [])
+    .map((seat) => normalizeSeat(seat, userIds, presetIds))
+    .filter((seat): seat is Seat => seat !== null)
+    .filter((seat) => {
+      if (seenSeatIds.has(seat.id)) return false
+      seenSeatIds.add(seat.id)
+      return true
+    })
 
-  return { users, presets, pairings, selection }
+  return { users, presets, pairings, selection, seats }
 }
 
 export function loadState(): AppState {

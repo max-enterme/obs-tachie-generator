@@ -16,6 +16,7 @@ import {
   type Pairing,
   type Preset,
   type Selection,
+  type Seat,
 } from './lib/types'
 
 const STEPS: StepDef[] = [
@@ -30,13 +31,14 @@ export default function App() {
   const [presets, setPresets] = useState<Preset[]>(initial.presets)
   const [pairings, setPairings] = useState<Pairing[]>(initial.pairings)
   const [selection, setSelection] = useState<Selection>(initial.selection)
+  const [seats] = useState<Seat[]>(initial.seats)
   const [step, setStep] = useState(0)
   // ②で編集中のプリセット（下段プレビュー用）。未指定なら先頭にフォールバック。
   const [focusPresetId, setFocusPresetId] = useState<string | null>(null)
 
   useEffect(() => {
-    saveState({ users, presets, pairings, selection })
-  }, [users, presets, pairings, selection])
+    saveState({ users, presets, pairings, selection, seats })
+  }, [users, presets, pairings, selection, seats])
 
   const focusedPreset = presets.find((p) => p.id === focusPresetId) ?? presets[0] ?? null
 

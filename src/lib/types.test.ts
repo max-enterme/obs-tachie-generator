@@ -5,6 +5,8 @@ import {
   DEFAULT_OPTIONS,
   DEFAULT_SPEAK,
   makeDefaultPreset,
+  makeDefaultSeat,
+  seatPreset,
   renderUser,
   presetToOptions,
   resetPresetOptions,
@@ -171,5 +173,22 @@ describe('既定プリセット', () => {
     expect(reset.mouthImageUrl).toBe('data:b')
     expect(reset.mouthPerMove).toBeUndefined()
     expect(reset.imageUrl).toBe('data:a')
+  })
+})
+
+describe('makeDefaultSeat', () => {
+  it('SE1 左下・距離 0・候補なし', () => {
+    expect(makeDefaultSeat('s1')).toEqual({
+      id: 's1', name: '', anchorX: 'left', anchorY: 'bottom', left: 0, bottom: 0, candidates: [],
+    })
+  })
+})
+
+describe('seatPreset', () => {
+  it('SE2 位置だけ席の値に', () => {
+    const p = { ...makeDefaultPreset('p1'), imageUrl: 'data:a', width: 300, left: 100, bottom: 50, anchorX: 'center' as const, anchorY: 'middle' as const }
+    const result = seatPreset(p, { anchorX: 'right', anchorY: 'top', left: 20, bottom: 10 })
+    expect(result).toMatchObject({ anchorX: 'right', anchorY: 'top', left: 20, bottom: 10, width: 300, imageUrl: 'data:a' })
+    expect(p.left).toBe(100)
   })
 })

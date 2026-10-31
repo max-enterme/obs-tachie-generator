@@ -9,9 +9,55 @@ import {
   DEFAULT_SPEAK,
 } from './types'
 
-const EMPTY = { users: [], presets: [], pairings: [], selection: { userId: null, presetId: null } }
+const EMPTY = { users: [], presets: [], pairings: [], selection: { userId: null, presetId: null }, seats: [] }
 
 describe('normalizeState', () => {
+  it('ST1 seats の無い古いデータは []', () => {
+    expect(normalizeState({ users: [], presets: [] }).seats).toEqual([])
+  })
+
+  it('ST2 席の候補は実在するユーザー × プリセットだけ', () => {
+    const state = normalizeState({
+      users: [{ id: '1', name: 'a' }], presets: [{ id: 'p1', name: 'A' }],
+      seats: [{ id: 's1', name: '席', candidates: [{ userId: '1', presetId: 'p1' }, { userId: '9', presetId: 'p1' }, { userId: '1', presetId: 'x' }, 5] }],
+    })
+    expect(state.seats[0]).toMatchObject({ id: 's1', name: '席', candidates: [{ userId: '1', presetId: 'p1' }] })
+  })
+
+  it('ST3 同じユーザーの 2 回目は落とす', () => {
+    const state = normalizeState({
+      users: [{ id: '1', name: 'a' }, { id: '2', name: 'b' }],
+      presets: [{ id: 'p1' }, { id: 'p2' }],
+      seats: [{ id: 's1', candidates: [{ userId: '1', presetId: 'p1' }, { userId: '2', presetId: 'p1' }, { userId: '1', presetId: 'p2' }] }],
+    })
+    expect(state.seats[0].candidates).toEqual([{ userId: '1', presetId: 'p1' }, { userId: '2', presetId: 'p1' }])
+  })
+
+  it('ST4 壊れた席は落とし、名前は文字列に', () => {
+    const state = normalizeState({ users: [], presets: [], seats: [null, { name: 'x' }, { id: '', name: 'y' }, { id: 's2', name: 3 }, { id: 's3', name: 'z', candidates: 'x' }] })
+    expect(state.seats.map(({ id, name, candidates }) => ({ id, name, candidates }))).toEqual([
+      { id: 's2', name: '', candidates: [] }, { id: 's3', name: 'z', candidates: [] },
+    ])
+  })
+
+  it('ST5 同じ id の席は最初の 1 件', () => {
+    const state = normalizeState({ users: [], presets: [], seats: [{ id: 's1', name: 'a' }, { id: 's1', name: 'b' }] })
+    expect(state.seats.map(({ id, name, candidates }) => ({ id, name, candidates }))).toEqual([{ id: 's1', name: 'a', candidates: [] }])
+  })
+
+  it('ST6 seats が配列でなければ []', () => {
+    expect(normalizeState({ users: [], presets: [], seats: {} }).seats).toEqual([])
+  })
+
+  it('ST7 席の位置は不正なら既定に', () => {
+    const state = normalizeState({ users: [], presets: [], seats: [
+      { id: 's1', name: 'a', anchorX: 'x', anchorY: 3, left: 'a', bottom: Number.NaN },
+      { id: 's2', name: 'b', anchorX: 'right', anchorY: 'top', left: 12, bottom: -5 },
+    ] })
+    expect(state.seats[0]).toMatchObject({ anchorX: 'left', anchorY: 'bottom', left: 0, bottom: 0 })
+    expect(state.seats[1]).toMatchObject({ anchorX: 'right', anchorY: 'top', left: 12, bottom: -5 })
+  })
+
   it('空入力は空 state', () => {
     expect(normalizeState(null)).toEqual(EMPTY)
     expect(normalizeState(undefined)).toEqual(EMPTY)
