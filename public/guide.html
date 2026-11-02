@@ -6,7 +6,7 @@
     <title>使い方ガイド — OBS 立ち絵ジェネレーター</title>
     <meta
       name="description"
-      content="OBS に Discord の通話相手を立ち絵で出すための CSS を作るツールの使い方。用意するもの、3 ステップの手順、OBS への貼り方、うまくいかないときの対処。"
+      content="OBS に Discord の通話相手を立ち絵で出すための CSS を作るツールの使い方。用意するもの、4 ステップの手順、OBS への貼り方、うまくいかないときの対処。"
     />
     <style>
       /* ツール本体（src/index.css）と同じ Discord ダーク寄せの配色 */
@@ -444,7 +444,7 @@
 
       <section id="steps">
         <h2>使い方</h2>
-        <p class="sub">ツールの画面上部にある ①〜③ のタブを順に進めます。最後に OBS に貼ります。</p>
+        <p class="sub">ツールの画面上部にある ①〜④ のタブを順に進めます。最後に OBS に貼ります。</p>
         <ol class="steps">
           <li>
             <h3>ユーザーを登録する</h3>
@@ -480,6 +480,12 @@
             </p>
             <p>よく使う組み合わせは <span class="ui">保存</span> しておくと、あとでクリック 1 つで呼び戻せます。</p>
           </li>
+          <li>
+            <h3>席を作る（入れ替わり・任意）</h3>
+            <p>ゲスト枠のように日によって人が変わる場所は、④ の <span class="ui">新しい席</span> で席を作り、<span class="ui">候補に追加</span> で人とプリセットを並べます。通話にいる人の立ち絵がその席に出ます。</p>
+            <p>何人か同時にいるときはリストの上の人を出し、誰もいないときは何も出ません。順番は <span class="ui">上へ</span>・<span class="ui">下へ</span> で変えます。</p>
+            <p>位置は <span class="ui">席の位置</span> で席ごとに 1 つ決めます（誰が出ても同じ位置）。幅・名前・演出は、その人のプリセットのままです。</p>
+          </li>
           <li class="obs" id="obs">
             <h3>OBS に貼る</h3>
             <ol>
@@ -490,10 +496,10 @@
               <li><span class="ui">Voice Widget</span> を選び、サーバーとボイスチャンネルを選ぶ → 出てきた URL をコピー</li>
               <li>OBS で ソースの <span class="ui">＋</span> → <span class="ui">ブラウザ</span> を追加し、<span class="ui">URL</span> にさっきの URL を貼る</li>
               <li>幅・高さは OBS の画面（キャンバス）と同じ大きさにする（例: 1920 × 1080）</li>
-              <li><span class="ui">カスタム CSS</span> 欄の中身を<b>消してから</b>、③ でコピーした CSS を貼る → <span class="ui">OK</span></li>
+              <li><span class="ui">カスタム CSS</span> 欄の中身を<b>消してから</b>、③（席は ④）でコピーした CSS を貼る → <span class="ui">OK</span></li>
             </ol>
             <p class="note">
-              <b>1 人につきブラウザソース 1 つ</b>です。3 人出したいなら、③ で 1 人ずつ CSS を出して、ブラウザソースを 3 つ作ります（URL はどれも同じで大丈夫）。
+              <b>1 人につきブラウザソース 1 つ</b>です。3 人出したいなら、③ で 1 人ずつ CSS を出して、ブラウザソースを 3 つ作ります（URL はどれも同じで大丈夫）。入れ替わりの席は、席 1 つにつきブラウザソース 1 つです。
             </p>
           </li>
         </ol>

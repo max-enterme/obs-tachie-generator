@@ -4,24 +4,30 @@ import AppUserList from './ui/AppUserList'
 import PresetPanel from './ui/PresetPanel'
 import CombinePanel from './ui/CombinePanel'
 import OutputPanel from './ui/OutputPanel'
+import SeatPanel from './ui/SeatPanel'
+import SeatOutputPanel from './ui/SeatOutputPanel'
 import TachiePreview from './ui/TachiePreview'
 import Stepper, { type StepDef } from './ui/Stepper'
 import { useImageNaturalSize } from './ui/useImageNaturalSize'
 import { loadState, saveState } from './lib/state'
 import {
   makeDefaultPreset,
+  makeDefaultSeat,
   newId,
   resolveDisplayName,
+  seatPreset,
   type AppUser,
   type Pairing,
   type Preset,
   type Selection,
+  type Seat,
 } from './lib/types'
 
 const STEPS: StepDef[] = [
   { key: 'ユーザー', desc: 'Discord ID・名前' },
   { key: '立ち絵・演出', desc: 'プリセットを用意' },
   { key: '組み合わせ & 出力', desc: '選んで CSS を出す' },
+  { key: '席（入れ替わり）', desc: '候補を並べて1ソースに' },
 ]
 
 export default function App() {
@@ -30,15 +36,28 @@ export default function App() {
   const [presets, setPresets] = useState<Preset[]>(initial.presets)
   const [pairings, setPairings] = useState<Pairing[]>(initial.pairings)
   const [selection, setSelection] = useState<Selection>(initial.selection)
+  const [seats, setSeats] = useState<Seat[]>(initial.seats)
   const [step, setStep] = useState(0)
   // ②で編集中のプリセット（下段プレビュー用）。未指定なら先頭にフォールバック。
   const [focusPresetId, setFocusPresetId] = useState<string | null>(null)
+  const [focusSeatId, setFocusSeatId] = useState<string | null>(null)
+  const [seatPreviewUserId, setSeatPreviewUserId] = useState<string | null>(null)
 
   useEffect(() => {
-    saveState({ users, presets, pairings, selection })
-  }, [users, presets, pairings, selection])
+    saveState({ users, presets, pairings, selection, seats })
+  }, [users, presets, pairings, selection, seats])
 
   const focusedPreset = presets.find((p) => p.id === focusPresetId) ?? presets[0] ?? null
+  const focusedSeat = seats.find((s) => s.id === focusSeatId) ?? seats[0] ?? null
+  const seatPreviewCandidate =
+    focusedSeat?.candidates.find((c) => c.userId === seatPreviewUserId) ??
+    focusedSeat?.candidates[0] ?? null
+  const seatPreviewUser = seatPreviewCandidate
+    ? users.find((u) => u.id === seatPreviewCandidate.userId) ?? null
+    : null
+  const seatPreviewPreset = seatPreviewCandidate
+    ? presets.find((p) => p.id === seatPreviewCandidate.presetId) ?? null
+    : null
 
   // 作業中選択の有効値（明示選択が無ければ先頭にフォールバック）。
   const effUserId =
@@ -69,6 +88,12 @@ export default function App() {
     setUsers((prev) => prev.filter((u) => u.id !== id))
     setPairings((prev) => prev.filter((p) => p.userId !== id))
     setSelection((s) => (s.userId === id ? { ...s, userId: null } : s))
+    setSeats((prev) =>
+      prev.map((seat) => ({
+        ...seat,
+        candidates: seat.candidates.filter((c) => c.userId !== id),
+      })),
+    )
   }
 
   // --- presets ---
@@ -85,6 +110,12 @@ export default function App() {
     setPairings((prev) => prev.filter((p) => p.presetId !== id))
     setFocusPresetId((cur) => (cur === id ? null : cur))
     setSelection((s) => (s.presetId === id ? { ...s, presetId: null } : s))
+    setSeats((prev) =>
+      prev.map((seat) => ({
+        ...seat,
+        candidates: seat.candidates.filter((c) => c.presetId !== id),
+      })),
+    )
   }
 
   // --- selection & saved pairings ---
@@ -109,6 +140,70 @@ export default function App() {
     setPairings((prev) => prev.filter((_, i) => i !== index))
   }
 
+  function addSeat() {
+    const seat = makeDefaultSeat(newId())
+    setSeats((prev) => [...prev, seat])
+    setFocusSeatId(seat.id)
+    setSeatPreviewUserId(null)
+  }
+  function removeSeat(id: string) {
+    setSeats((prev) => prev.filter((seat) => seat.id !== id))
+    setFocusSeatId((current) => (current === id ? null : current))
+    setSeatPreviewUserId(null)
+  }
+  function selectSeat(id: string) {
+    setFocusSeatId(id)
+    setSeatPreviewUserId(null)
+  }
+  function renameSeat(id: string, name: string) {
+    setSeats((prev) => prev.map((seat) => (seat.id === id ? { ...seat, name } : seat)))
+  }
+  function changeSeatPosition(
+    id: string,
+    patch: Partial<Pick<Seat, 'anchorX' | 'anchorY' | 'left' | 'bottom'>>,
+  ) {
+    setSeats((prev) => prev.map((seat) => (seat.id === id ? { ...seat, ...patch } : seat)))
+  }
+  function previewCandidate(userId: string) {
+    setSeatPreviewUserId(userId)
+  }
+  function addCandidate(seatId: string, candidate: Pairing) {
+    setSeats((prev) =>
+      prev.map((seat) => {
+        if (seat.id !== seatId || seat.candidates.some((c) => c.userId === candidate.userId)) {
+          return seat
+        }
+        return {
+          ...seat,
+          candidates: [...seat.candidates, { userId: candidate.userId, presetId: candidate.presetId }],
+        }
+      }),
+    )
+  }
+  function moveCandidate(seatId: string, index: number, delta: -1 | 1) {
+    setSeats((prev) =>
+      prev.map((seat) => {
+        if (seat.id !== seatId) return seat
+        const target = index + delta
+        if (target < 0 || target >= seat.candidates.length) return seat
+        const candidates = [...seat.candidates]
+        const candidate = candidates[index]
+        candidates[index] = candidates[target]
+        candidates[target] = candidate
+        return { ...seat, candidates }
+      }),
+    )
+  }
+  function removeCandidate(seatId: string, index: number) {
+    setSeats((prev) =>
+      prev.map((seat) =>
+        seat.id === seatId
+          ? { ...seat, candidates: seat.candidates.filter((_, i) => i !== index) }
+          : seat,
+      ),
+    )
+  }
+
   function goto(next: number) {
     setStep(Math.max(0, Math.min(STEPS.length - 1, next)))
   }
@@ -118,7 +213,7 @@ export default function App() {
       <header>
         <h1>OBS 立ち絵ジェネレーター</h1>
         <p>
-          「誰（Discord ID）」と「見た目（立ち絵プリセット）」を別々に用意して、選んだ1組を出力します。
+          「誰（Discord ID）」と「見た目（立ち絵プリセット）」を別々に用意して、選んだ1組、または入れ替わりの席を出力します。
         </p>
         <p>
           <a className="guide-link" href={`${import.meta.env.BASE_URL}guide.html`}>
@@ -214,6 +309,52 @@ export default function App() {
               imageNaturalWidth={selectedNatural?.width ?? null}
               imageNaturalHeight={selectedNatural?.height ?? null}
             />
+          </section>
+        )}
+
+        {step === 3 && (
+          <section className="step-panel">
+            <div className="step-head">
+              <span className="step-num">4</span>
+              <div>
+                <h2>席（入れ替わり）</h2>
+                <p className="lead">
+                  1 つのブラウザソースに候補を並べておくと、通話にいる人の立ち絵がその席に出ます。何人か同時にいるときはリストの上の人を出し、誰もいないときは何も出しません。
+                </p>
+              </div>
+            </div>
+            <SeatPanel
+              seats={seats}
+              seat={focusedSeat}
+              users={users}
+              presets={presets}
+              previewUserId={seatPreviewCandidate?.userId ?? null}
+              onAddSeat={addSeat}
+              onRemoveSeat={removeSeat}
+              onSelectSeat={selectSeat}
+              onRenameSeat={renameSeat}
+              onChangeSeatPosition={changeSeatPosition}
+              onPreviewCandidate={previewCandidate}
+              onMoveCandidate={moveCandidate}
+              onRemoveCandidate={removeCandidate}
+              onAddCandidate={addCandidate}
+            />
+            <div className="combine-grid">
+              <SeatOutputPanel seat={focusedSeat} users={users} presets={presets} />
+              <TachiePreview
+                preset={
+                  seatPreviewPreset && focusedSeat
+                    ? { ...seatPreset(seatPreviewPreset, focusedSeat), hideWhenAway: true }
+                    : null
+                }
+                nameText={seatPreviewUser ? resolveDisplayName(seatPreviewUser) : ''}
+                title={
+                  seatPreviewUser
+                    ? `プレビュー（${seatPreviewUser.name || seatPreviewUser.id}）`
+                    : 'プレビュー'
+                }
+              />
+            </div>
           </section>
         )}
 

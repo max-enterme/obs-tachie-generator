@@ -231,6 +231,27 @@ export interface Pairing {
 }
 
 /**
+ * 席 = 1 ブラウザソース。候補(ユーザー × プリセット)を並べておき、通話にいる候補のうち
+ * **リストの上の人を 1 人だけ**出す。誰もいないときは何も出さない。
+ */
+export interface Seat {
+  /** アプリ内キー({@link newId} 生成)。 */
+  id: string
+  /** 席の名前(メモ用)。出力CSSの先頭コメントとファイル名に使う。 */
+  name: string
+  /** 席の横アンカー。誰が出てもこの位置(候補のプリセットの位置は使わない)。 */
+  anchorX: AnchorX
+  /** 席の縦アンカー。 */
+  anchorY: AnchorY
+  /** 横アンカーからの距離(px)。意味は {@link GenerateOptions.left} と同じ。 */
+  left: number
+  /** 縦アンカーからの距離(px)。意味は {@link GenerateOptions.bottom} と同じ。 */
+  bottom: number
+  /** 候補。並び = 優先順(先頭ほど優先)。同じ userId は 1 回まで。 */
+  candidates: Pairing[]
+}
+
+/**
  * 「作業中の選択」1組。出力CSSはこの選択1組を対象にする。
  * `pairings`（保存リスト）とは別で、保存はこの選択を貯める・呼び戻すためのもの。
  */
@@ -250,6 +271,8 @@ export interface AppState {
   presets: Preset[]
   pairings: Pairing[]
   selection: Selection
+  /** 席(入れ替わり)。007 より前の保存データには無い → `[]`。 */
+  seats: Seat[]
 }
 
 /**
@@ -310,6 +333,27 @@ export function makeDefaultPreset(id: string): Preset {
     speak: { ...DEFAULT_SPEAK },
     nameLabel: { ...DEFAULT_NAME_LABEL },
   }
+}
+
+/** 新しい席(名前空・左下・距離 0・候補なし)。 */
+export function makeDefaultSeat(id: string): Seat {
+  return {
+    id,
+    name: '',
+    anchorX: DEFAULT_ANCHOR_X,
+    anchorY: DEFAULT_ANCHOR_Y,
+    left: DEFAULT_OPTIONS.left,
+    bottom: DEFAULT_OPTIONS.bottom,
+    candidates: [],
+  }
+}
+
+/** プリセットの位置だけを席の値で上書きした写しを返す。 */
+export function seatPreset(
+  p: Preset,
+  seat: Pick<Seat, 'anchorX' | 'anchorY' | 'left' | 'bottom'>,
+): Preset {
+  return { ...p, anchorX: seat.anchorX, anchorY: seat.anchorY, left: seat.left, bottom: seat.bottom }
 }
 
 /** プリセットのオプション値を既定に戻す（名前・立ち絵・口開き絵は保持）。 */

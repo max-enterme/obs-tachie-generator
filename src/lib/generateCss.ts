@@ -357,7 +357,7 @@ function textOutline(color: string, width: number): string {
  * 名前ラベル `body::before` のブロック。名前が空、または `show` が false なら `null`（＝出力しない）。
  * 位置は**立ち絵と同じアンカー**からの距離で出す（{@link placeNameLabel}）。
  */
-function nameBlock(user: TachieUser, options: GenerateOptions): string | null {
+function nameBlock(user: TachieUser, options: GenerateOptions, selector = 'body::before'): string | null {
   const label: NameLabel = options.nameLabel
   const text = resolveDisplayName(user)
   if (!label.show || text === '') return null
@@ -437,7 +437,7 @@ function nameBlock(user: TachieUser, options: GenerateOptions): string | null {
       ? `/* 名前（任意テキスト。Streamkit の名前は隠し、これだけを出す）
    位置合わせの基準幅 ${boxWidth}px は立ち絵画像の実サイズ。**画像を差し替えたらCSSを出し直すこと**。 */`
       : `/* 名前（任意テキスト。Streamkit の名前は隠し、これだけを出す） */`
-  return `${header}\nbody::before {\n${decls.join('\n')}\n}`
+  return `${header}\n${selector} {\n${decls.join('\n')}\n}`
 }
 
 /**
@@ -445,9 +445,9 @@ function nameBlock(user: TachieUser, options: GenerateOptions): string | null {
  * keyframe の `transform` は要素の `transform` を丸ごと置き換えるので、織り込まないと
  * アニメの間だけ中央寄せが外れて立ち絵が飛ぶ（spec の受け入れ条件）。
  */
-const KEYFRAMES_JUMP_TRANSFORM = (jumpPx: number, centering: string[]) => {
+const KEYFRAMES_JUMP_TRANSFORM = (jumpPx: number, centering: string[], suffix = '') => {
   const at = (v: string) => composeTransform(...centering, v)
-  return `@keyframes speak-jump {
+  return `@keyframes speak-jump${suffix} {
   0% { transform: ${at('translateY(0)')}; }
   50% { transform: ${at(`translateY(-${jumpPx}px)`)}; }
   100% { transform: ${at('translateY(0)')}; }
@@ -460,27 +460,27 @@ const KEYFRAMES_JUMP_BOTTOM = (jumpPx: number) => `@keyframes speak-jump {
   100% { bottom: 0px; }
 }`
 
-const KEYFRAMES_LIGHT = (color: string, width: number) => {
+const KEYFRAMES_LIGHT = (color: string, width: number, suffix = '') => {
   const c = safeColor(color)
   // 幅 w のフチ＝4方向 ±w のオフセット影。グローは半径 w↔4w で脈動（既定 w=2 で従来の 2↔8）。
   const w = width > 0 ? width : 1
   const shadows = (blur: number) =>
     `drop-shadow(0 0 ${blur}px ${c}) drop-shadow(${w}px ${w}px 0px ${c}) drop-shadow(-${w}px -${w}px 0px ${c}) drop-shadow(-${w}px ${w}px 0px ${c}) drop-shadow(${w}px -${w}px 0px ${c})`
-  return `@keyframes speak-light {
+  return `@keyframes speak-light${suffix} {
   0% { filter: ${shadows(w)}; }
   50% { filter: ${shadows(4 * w)}; }
   100% { filter: ${shadows(w)}; }
 }`
 }
 
-const KEYFRAMES_BLINK = `@keyframes speak-blink {
+const KEYFRAMES_BLINK = (suffix = '') => `@keyframes speak-blink${suffix} {
   0% { opacity: 1; }
   50% { opacity: 0.35; }
   100% { opacity: 1; }
 }`
 
-const KEYFRAMES_MOUTH = (id: string) => `/* 口パク：話している間だけ立ち絵（口閉じ）と口開き絵を交互に出す。口開き絵は立ち絵と同じ縦横比で用意すること */
-@keyframes speak-mouth {
+const KEYFRAMES_MOUTH = (id: string, suffix = '') => `/* 口パク：話している間だけ立ち絵（口閉じ）と口開き絵を交互に出す。口開き絵は立ち絵と同じ縦横比で用意すること */
+@keyframes speak-mouth${suffix} {
   0% { background-image: var(--img-stand-url-${id}); }
   50% { background-image: var(--img-mouth-url-${id}); }
   100% { background-image: var(--img-stand-url-${id}); }
@@ -496,9 +496,9 @@ function activeEffects(speak: SpeakEffect): Effect[] {
 }
 
 /** `animation:` の値を組む。 */
-function animationValue(effects: Effect[], durationMs: number): string {
+function animationValue(effects: Effect[], durationMs: number, suffix = ''): string {
   return effects
-    .map((e) => `${durationMs}ms infinite alternate ease-in-out speak-${e}`)
+    .map((e) => `${durationMs}ms infinite alternate ease-in-out speak-${e}${suffix}`)
     .join(',')
 }
 
@@ -524,17 +524,18 @@ function keyframeBlocks(
   jumpKind: 'transform' | 'bottom',
   /** 中央寄せ分の translate（transform 版の跳ねに前置する）。 */
   centering: string[] = [],
+  suffix = '',
 ): string[] {
   const blocks: string[] = []
   if (effects.includes('jump')) {
     blocks.push(
       jumpKind === 'transform'
-        ? KEYFRAMES_JUMP_TRANSFORM(speak.jumpPx, centering)
+        ? KEYFRAMES_JUMP_TRANSFORM(speak.jumpPx, centering, suffix)
         : KEYFRAMES_JUMP_BOTTOM(speak.jumpPx),
     )
   }
-  if (effects.includes('light')) blocks.push(KEYFRAMES_LIGHT(speak.outlineColor, speak.outlineWidth))
-  if (effects.includes('blink')) blocks.push(KEYFRAMES_BLINK)
+  if (effects.includes('light')) blocks.push(KEYFRAMES_LIGHT(speak.outlineColor, speak.outlineWidth, suffix))
+  if (effects.includes('blink')) blocks.push(KEYFRAMES_BLINK(suffix))
   return blocks
 }
 
@@ -556,6 +557,114 @@ export function tachieBoxSize(
   return { width: w, height: h }
 }
 
+function tachieAfterDecls(
+  id: string,
+  options: GenerateOptions,
+  pos: PositionParts,
+  staticTransform: string,
+  box: { width: number; height: number } | null,
+  display: string,
+): string[] {
+  const { width, dimWhenQuiet } = options
+  return box
+    ? [
+        `  content: "";`, `  position: fixed;`, ...pos.decls.map((d) => `  ${d}`),
+        `  display: ${display};`, ...(staticTransform ? [`  transform: ${staticTransform};`] : []),
+        `  width: ${box.width}px;`, `  height: ${box.height}px;`,
+        `  background-image: var(--img-stand-url-${id});`, `  background-size: contain;`,
+        `  background-repeat: no-repeat;`, `  background-position: center;`,
+        ...(dimWhenQuiet ? [`  filter: brightness(${DIM_BRIGHTNESS_PCT}%);`] : []),
+      ]
+    : [
+        `  content: var(--img-stand-url-${id});`, `  position: fixed;`, ...pos.decls.map((d) => `  ${d}`),
+        `  display: ${display};`, ...(staticTransform ? [`  transform: ${staticTransform};`] : []),
+        ...(width != null ? [`  width: ${width}px;`] : []),
+        ...(dimWhenQuiet ? [`  filter: brightness(${DIM_BRIGHTNESS_PCT}%);`] : []),
+      ]
+}
+
+function speakingDecls(
+  options: GenerateOptions,
+  effects: Effect[],
+  mouthOn: boolean,
+  suffix = '',
+): string[] {
+  const decls: string[] = []
+  if (options.dimWhenQuiet && !effects.includes('light')) decls.push(`  filter: brightness(100%);`)
+  const animations = [
+    ...(effects.length > 0 ? [animationValue(effects, options.speak.durationMs, suffix)] : []),
+    ...(mouthOn ? [`${resolveMouthIntervalMs(options.mouthIntervalMs)}ms infinite steps(1, end) speak-mouth${suffix}`] : []),
+  ]
+  if (animations.length > 0) decls.push(`  animation: ${animations.join(',')};`)
+  return decls
+}
+
+export interface SeatCandidate {
+  user: TachieUser
+  options: GenerateOptions
+}
+
+/** 候補の在室と、上位候補が不在であることを表すセレクタ。 */
+export function seatActiveSelector(ids: string[], index: number): string {
+  const id = safeId(ids[index] ?? '')
+  const excluded = ids.slice(0, index).map((candidateId) =>
+    `:not(:has(img[src*="avatars/${safeId(candidateId)}"]))`,
+  )
+  return `body:has(img[src*="avatars/${id}"])${excluded.join('')}`
+}
+
+/** 席 1 つぶんの CSS。候補のうち在室している最上位 1 人だけを描画する。 */
+export function generateSeatCss(seatName: string, candidates: SeatCandidate[]): string {
+  if (candidates.length === 0) return '/* 席に候補がいません。④ で候補を追加してください。 */\n'
+
+  const label = seatName.trim() ? cssComment(seatName) : '無名の席'
+  const mouthOn = candidates.map(({ user, options }) =>
+    tachieBoxSize(options.width, options.imageNaturalWidth, options.imageNaturalHeight) != null &&
+    (user.mouthImageUrl ?? '').trim() !== '',
+  )
+  const users = candidates.map(({ user }, index) =>
+    mouthOn[index] ? user : { ...user, mouthImageUrl: undefined },
+  )
+  const parts = [
+    `/* 席「${label}」: 候補 ${candidates.length} 人。通話にいる候補のうち、リストの上の人を 1 人だけ出す（誰もいないときは何も出さない） */`,
+    rootBlock(users, true),
+    `/* 立ち絵は body::after ただ1つで描画。出すのは「在室で、かつ上の候補が誰も在室していない」候補だけ。\n   Streamkit の実要素は全部隠し、在室と発話だけ検知する。 */`,
+    `body, #root {\n  overflow: hidden !important;\n}`,
+  ]
+
+  const keyframes: string[] = []
+  candidates.forEach(({ user, options }, index) => {
+    const id = safeId(user.id)
+    const suffix = `-c${index + 1}`
+    const active = seatActiveSelector(candidates.map((candidate) => candidate.user.id), index)
+    const o = { ...options, hideWhenAway: false }
+    const { speak, dimWhenQuiet } = o
+    const pos = placementDecls(placeTachie(resolveAnchors(o), o.left, o.bottom))
+    const staticTransform = composeTransform(...pos.transforms)
+    const box = tachieBoxSize(o.width, o.imageNaturalWidth, o.imageNaturalHeight)
+    const effects = activeEffects(speak)
+    const afterDecls = tachieAfterDecls(id, o, pos, staticTransform, box, 'block')
+    const userLabel = user.name ? `${cssComment(user.name)} ` : ''
+    parts.push(`/* 候補${index + 1}: ${userLabel}(${id}) */\n${active}::after {\n${afterDecls.join('\n')}\n}`)
+    const nameCss = nameBlock(user, o, `${active}::before`)
+    if (nameCss) parts.push(nameCss)
+
+    if (effects.length > 0 || dimWhenQuiet || mouthOn[index]) {
+      const speakingSelector = `${active}:has(img[src*="avatars/${id}"][class*="Voice_avatarSpeaking__"])::after`
+      parts.push(`${speakingSelector} {\n${speakingDecls(o, effects, mouthOn[index], suffix).join('\n')}\n}`)
+    }
+
+    keyframes.push(...keyframeBlocks(effects, speak, 'transform', pos.transforms, suffix))
+    if (mouthOn[index]) keyframes.push(KEYFRAMES_MOUTH(id, suffix))
+  })
+  parts.push(
+    `img {\n  display: none !important;\n}`,
+    `/* Streamkit のアカウント名は隠す（名前は上のブロックで出す） */\n[class*="Voice_name__"], [class*="Voice_user__"] {\n  display: none !important;\n}`,
+  )
+  parts.push(...keyframes)
+  return parts.join('\n\n') + '\n'
+}
+
 /**
  * 常時表示（standalone）。`body::after` 1要素で1人を描画する。1人=1ブラウザソース。
  */
@@ -574,32 +683,7 @@ export function generateStandaloneCss(user: TachieUser, options: GenerateOptions
   const box = tachieBoxSize(width, imageNaturalWidth, imageNaturalHeight)
   const mouthOn = box != null && (user.mouthImageUrl ?? '').trim() !== ''
 
-  const afterDecls = box
-    ? [
-        `  content: "";`,
-        `  position: fixed;`,
-        ...pos.decls.map((d) => `  ${d}`),
-        `  display: ${hideWhenAway ? 'none' : 'block'};`,
-        ...(staticTransform ? [`  transform: ${staticTransform};`] : []),
-        `  width: ${box.width}px;`,
-        `  height: ${box.height}px;`,
-        `  background-image: var(--img-stand-url-${id});`,
-        `  background-size: contain;`,
-        `  background-repeat: no-repeat;`,
-        `  background-position: center;`,
-        ...(dimWhenQuiet ? [`  filter: brightness(${DIM_BRIGHTNESS_PCT}%);`] : []),
-      ]
-    : [
-        `  content: var(--img-stand-url-${id});`,
-        `  position: fixed;`,
-        ...pos.decls.map((d) => `  ${d}`),
-        // 通話にいないときは隠す設定なら、既定は非表示（在室時だけ下のルールで出す）。
-        `  display: ${hideWhenAway ? 'none' : 'block'};`,
-        ...(staticTransform ? [`  transform: ${staticTransform};`] : []),
-        ...(width != null ? [`  width: ${width}px;`] : []),
-        // 静かな人を暗くする：非発話時の既定を暗く
-        ...(dimWhenQuiet ? [`  filter: brightness(${DIM_BRIGHTNESS_PCT}%);`] : []),
-      ]
+  const afterDecls = tachieAfterDecls(id, options, pos, staticTransform, box, hideWhenAway ? 'none' : 'block')
 
   const afterHeader = box
     ? `/* 立ち絵（常時表示：通話に居ても居なくても同じ位置）
@@ -620,22 +704,11 @@ export function generateStandaloneCss(user: TachieUser, options: GenerateOptions
 
   // 発話中のルール：演出があるか、暗転解除（dim）が要るなら出す
   if (effects.length > 0 || dimWhenQuiet || mouthOn) {
-    const speakingDecls: string[] = []
-    // outline アニメが filter を持つ場合はそれで明るさが戻る。それ以外は明示的に戻す。
-    if (dimWhenQuiet && !effects.includes('light')) {
-      speakingDecls.push(`  filter: brightness(100%);`)
-    }
-    const animations = [
-      ...(effects.length > 0 ? [animationValue(effects, speak.durationMs)] : []),
-      ...(mouthOn ? [`${resolveMouthIntervalMs(options.mouthIntervalMs)}ms infinite steps(1, end) speak-mouth`] : []),
-    ]
-    if (animations.length > 0) {
-      speakingDecls.push(`  animation: ${animations.join(',')};`)
-    }
+    const decls = speakingDecls(options, effects, mouthOn)
     parts.push(
       `/* 発話中：非表示の実 img に付く Voice_avatarSpeaking__ を :has() で検知して body::after を演出 */
 body:has(img[src*="avatars/${id}"][class*="Voice_avatarSpeaking__"])::after {
-${speakingDecls.join('\n')}
+${decls.join('\n')}
 }`,
     )
   }

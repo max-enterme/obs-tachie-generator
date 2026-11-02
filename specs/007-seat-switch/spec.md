@@ -3,7 +3,7 @@ feature: seat-switch
 issue: 76
 release: r4
 priority: should
-status: 未着手
+status: レビュー
 ---
 
 # 席の主が入れ替わる(1 つのブラウザソースに候補を並べ、通話にいる人の立ち絵を出す)
